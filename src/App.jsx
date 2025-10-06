@@ -23,9 +23,11 @@ import Header from "./components/Header";
 
 import { SearchProvider } from "./context/SearchContext";
 import { useTheme } from "./context/ThemeContext";
-import TimesheetReport from "./pages/TimesheetReport";
-import TimesheetHoursReport from "./pages/TimesheetHoursReport";
+
+//import TimesheetHoursReport from "./pages/TimesheetHoursReport"; Some old report page
+import WeeklyTimesheetReport from "./pages/WeeklyTimesheetReport";
 import DailyTimesheetReport from "./pages/DailyTimesheetReport";
+
 import ManageInvoices from "./pages/ManageInvoices";
 
 const AppLayout = ({ children }) => {
@@ -83,8 +85,7 @@ const AppRoutes = () => {
       <Route path="/" element={renderProtectedPage(["Admin", "Super Admin"], Dashboard)} />
       <Route path="/manage-employees" element={renderProtectedPage(["Admin", "Super Admin"], ManageEmployees)} />
       <Route path="/manage-clients" element={renderProtectedPage(["Admin", "Super Admin"], ManageClients)} />
-      <Route path="/timesheet-report" element={renderProtectedPage(["Admin", "Super Admin"], TimesheetReport)} />
-      <Route path="/timesheet-hours-report" element={renderProtectedPage(["Admin", "Super Admin"], TimesheetHoursReport)} />
+      <Route path="/timesheet-weekly-hours-report" element={renderProtectedPage(["Admin", "Super Admin"], WeeklyTimesheetReport)} />
       <Route path="/timesheet-daily-hours-report" element={renderProtectedPage(["Admin", "Super Admin"], DailyTimesheetReport)} />
 
       {/* Fallback */}

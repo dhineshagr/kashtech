@@ -265,43 +265,50 @@ const EditInvoiceModal = ({ invoice, onClose, onInvoiceUpdated }) => {
         <div className="p-6 bg-white min-h-screen">
             <h2 className="text-xl font-bold text-purple-900 mb-4">Edit Invoice #{invoice.invoice_num}</h2>
 
-            <div className="grid grid-cols-3 gap-4 mb-6">
-                <div>
-                    <label className="block text-sm font-semibold mb-1">Company</label>
-                    <select className="w-full border rounded px-3 py-2" value={selectedCompany} onChange={(e) => handleCompanyChange(e.target.value)}>
-                        <option value="">Select Company</option>
-                        {companies.map((c) => (
-                            <option key={c.company_id} value={c.company_id}>{c.company_name}</option>
-                        ))}
-                    </select>
-                </div>
+            <div className="grid grid-cols-1 gap-4 mb-6">
 
                 <div>
-                    <label className="block text-sm font-semibold mb-1">Project</label>
-                    <Select
-                        isMulti
-                        options={projects.map((p) => ({
-                            label: `${p.project_name}`,
-                            value: p.sow_id,
-                        }))}
-                        value={selectedProjects}
-                        onChange={(opts) => setSelectedProjects(opts)}
-                    />
-                </div>
+                    <div>
+                        <label className="block text-sm font-semibold mb-1">Company</label>
+                        <select className="w-full border rounded px-3 py-2" value={selectedCompany} onChange={(e) => handleCompanyChange(e.target.value)}>
+                            <option value="">Select Company</option>
+                            {companies.map((c) => (
+                                <option key={c.company_id} value={c.company_id}>{c.company_name}</option>
+                            ))}
+                        </select>
+                    </div>
 
-                <div className="flex gap-2">
-                    <div>
-                        <label className="block text-sm font-semibold mb-1">Start Date</label>
-                        <DatePicker selected={startDate} onChange={setStartDate} className="border px-2 py-1 rounded" />
+                    <div className="pt-3">
+                        <label className="block text-sm font-semibold mb-1">Project</label>
+                        <Select
+                            isMulti
+                            options={projects.map((p) => ({
+                                label: `${p.project_name}`,
+                                value: p.sow_id,
+                            }))}
+                            value={selectedProjects}
+                            onChange={(opts) => setSelectedProjects(opts)}
+                        />
                     </div>
-                    <div>
-                        <label className="block text-sm font-semibold mb-1">End Date</label>
-                        <DatePicker selected={endDate} onChange={setEndDate} className="border px-2 py-1 rounded" />
+
+                    <div className="flex gap-2 pt-3">
+                        <div>
+                            <label className="block text-sm font-semibold mb-1">Start Date</label>
+                            <DatePicker selected={startDate} onChange={setStartDate} className="border px-2 py-1 rounded" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold mb-1">End Date</label>
+                            <DatePicker selected={endDate} onChange={setEndDate} className="border px-2 py-1 rounded" />
+                        </div>
+
                     </div>
-                    <div className="flex items-end">
+
+                    <div className="flex justify-end items-end pt-3">
                         <button className="bg-green-600 text-white px-4 py-2 rounded" onClick={applyFilters}>Apply Filters</button>
                     </div>
+
                 </div>
+
             </div>
 
             <div className="space-y-6">
@@ -347,7 +354,7 @@ const EditInvoiceModal = ({ invoice, onClose, onInvoiceUpdated }) => {
                                                         <div>{row.hours}</div>
                                                         <input
                                                             type="number"
-                                                            className="border px-2 py-1"
+                                                            className="border px-2 py-1 w-20"
                                                             value={row.rate}
                                                             onChange={(e) => handleRateChange(projectKey, rows.indexOf(row), e.target.value)}
                                                         />

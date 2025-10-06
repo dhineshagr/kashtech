@@ -18,9 +18,13 @@ const ManageProjects = ({ companyId, companyName, onClose }) => {
     const [employees, setEmployees] = useState([]);
     const [rolesFromDB, setRolesFromDB] = useState([]);
     const [selectedRoleId, setSelectedRoleId] = useState(null);
-    const [estimatedRoleHours, setEstimatedRoleHours] = useState("");
+
+   
+
     const [selectedRoleEmployees, setSelectedRoleEmployees] = useState([]);
-    const [roleAssignments, setRoleAssignments] = useState([]);
+    const [roleAssignments, setRoleAssignments] = useState([]); // Holds the object { employeeIds, estimated_hours, rates, role_id, role_name}
+     const [estimatedRoleHours, setEstimatedRoleHours] = useState("");
+
     const [editingRoleIndex, setEditingRoleIndex] = useState(null);
     const token = localStorage.getItem("token");
     const [showNewRoleField, setShowNewRoleField] = useState(false);
@@ -132,6 +136,7 @@ const ManageProjects = ({ companyId, companyName, onClose }) => {
                         ? r.employees_with_rates.map((e) => Number(e.emp_id))
                         : [],
                     rates,
+                    perEmployeeHours: {}
                 };
             });
 
@@ -202,20 +207,52 @@ const ManageProjects = ({ companyId, companyName, onClose }) => {
         setEditingRoleIndex(null); // Make sure to reset this too
     };
 
-    const renderEmployeeRateInputs = (role, index, employees, onRateChange) => {
+    const handleEmpHoursChange = (roleIndex, empId, rawVal) => {
+        setRoleAssignments(prev => {
+            const next = [...prev];
+            const hrs = Math.max(0, Number(rawVal) || 0);
+
+            if (!next[roleIndex].perEmployeeHours) next[roleIndex].perEmployeeHours = {};
+            next[roleIndex].perEmployeeHours[empId] = hrs;
+
+            // Recalculate role total as the sum of per-employee hours
+            const total = Object.values(next[roleIndex].perEmployeeHours).reduce(
+                (s, n) => s + (Number(n) || 0),
+                0
+            );
+            next[roleIndex].estimated_hours = total;
+
+            return next;
+        });
+    };
+
+
+    const renderEmployeeRateInputs = (role, index, employees, onRateChange, onEmpHoursChange) => {
         return role.employees.map((empId) => {
             const emp = employees.find(e => e.emp_id === empId);
             const currentRate = role.rates?.[empId] || "";
+             const currentEmpHours = role.perEmployeeHours?.[empId] ?? "";
 
             return (
                 <div key={empId} className="flex items-center gap-2 mb-2">
                     <div className="w-1/2">{emp?.first_name} {emp?.last_name}</div>
+                     {/* Total Role Hourly Rate */}
                     <input
                         type="number"
                         className="w-1/2 border rounded px-2 py-1"
                         placeholder="Hourly Rate"
                         value={currentRate}
                         onChange={(e) => onRateChange(index, empId, e.target.value)}
+                    />
+                    {/* Per-employee Estimated Hours */}
+                    <input
+                        type="number"
+                        className="w-1/2 border rounded px-2 py-1"
+                        placeholder="Estimated Hours"
+                        value={currentEmpHours}
+                        onChange={(e) => onEmpHoursChange(index, empId, e.target.value)}
+                        min="0"
+                        step="any"
                     />
                 </div>
             );
@@ -224,7 +261,7 @@ const ManageProjects = ({ companyId, companyName, onClose }) => {
 
     const handleAddRole = async () => {
         let roleId = selectedRoleId;
-        const estimatedHours = parseInt(estimatedRoleHours);
+        // const estimatedHours = parseInt(estimatedRoleHours);
 
         if (showNewRoleField) {
             if (!newRoleName.trim()) {
@@ -249,8 +286,8 @@ const ManageProjects = ({ companyId, companyName, onClose }) => {
             }
         }
 
-        if (!roleId || !estimatedHours) {
-            alert("Please select a role and set estimated hours. Employees are optional.");
+        if (!roleId) {
+            alert("Please select a role and employees.");
             return;
         }
 
@@ -273,9 +310,10 @@ const ManageProjects = ({ companyId, companyName, onClose }) => {
         const updatedRole = {
             role_id: roleId,
             role_name: role.role_name,
-            estimated_hours: estimatedHours,
+            estimated_hours: 0, // A sum of all per-employee hours
             employees: employeeIds,
             rates: rates, // ⬅️ NEW: storing individual rates
+            perEmployeeHours: {} // { [empId]: number }
         };
 
         setRoleAssignments((prev) => {
@@ -354,6 +392,7 @@ const ManageProjects = ({ companyId, companyName, onClose }) => {
         let assignmentsToSave = [...roleAssignments];
         const roleId = parseInt(selectedRoleId);
         const estimatedHours = parseInt(estimatedRoleHours);
+        console.log("Selected roleId/estHours:", roleId, estimatedHours);
 
         if (roleId && (isNaN(estimatedHours) || estimatedHours <= 0)) {
             alert("Please enter valid estimated hours for the selected role.");
@@ -559,7 +598,7 @@ const ManageProjects = ({ companyId, companyName, onClose }) => {
                         </div>
 
                         <div className="mb-4">
-                            <label className="block text-sm mb-1">*Estimated Hours (auto)</label>
+                            <label className="block text-sm mb-1">*Project's Total Estimated Hours (Sum Total)</label>
                             <input
                                 type="number"
                                 value={totalEstimated}
@@ -626,17 +665,10 @@ const ManageProjects = ({ companyId, companyName, onClose }) => {
                                             ))}
                                     </select>
 
-                                    <input
-                                        type="number"
-                                        placeholder="*Estimated Hours"
-                                        value={estimatedRoleHours}
-                                        onChange={(e) => setEstimatedRoleHours(e.target.value)}
-                                        className="border rounded px-3 py-2"
-                                    />
                                 </div>
 
                                 {showNewRoleField && (
-                                    <div className="my-2">
+                                    <div className="">
                                         <label className="block text-sm mb-1">New Role Name</label>
                                         <input
                                             type="text"
@@ -752,7 +784,9 @@ const ManageProjects = ({ companyId, companyName, onClose }) => {
                                             updated[roleIndex].rates[empId] = rateVal;
                                             return updated;
                                         });
-                                    })}
+                                    },
+                                        handleEmpHoursChange
+                                    )}
                                 </div>
                             ))
                         ) : (

@@ -1,3 +1,4 @@
+// WeeklyTimesheetReport.jsx for Weekly Hours Report
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -11,7 +12,7 @@ import API from "../api/config";
 import { format, startOfWeek, endOfWeek, subWeeks } from "date-fns";
 
 
-const TimesheetReport = () => {
+const WeeklyTimesheetReport = () => {
     const [reportData, setReportData] = useState([]);
     const [expandedRows, setExpandedRows] = useState([]);
     const [visibleNotes, setVisibleNotes] = useState([]);
@@ -32,7 +33,7 @@ const TimesheetReport = () => {
     const [selectedCompanyId, setSelectedCompanyId] = useState(null);
 
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 15;
+    const itemsPerPage = 50;
 
     const token = localStorage.getItem("token");
     const navigate = useNavigate();
@@ -55,8 +56,11 @@ const TimesheetReport = () => {
                 return;
             }
 
+            console.log("Fetched Weekly report data:", res.data);
+
             setReportData(Array.isArray(res.data) ? res.data : []);
             setCurrentPage(1);
+
         } catch (err) {
             console.error("❌ Failed to fetch report data", err);
         }
@@ -313,7 +317,7 @@ const TimesheetReport = () => {
             {/* Rest of your JSX stays unchanged... */}
 
             <h2 className="text-4xl font-bold mb-6 text-purple-900 dark:text-white">
-                Timesheet Report by Weekly Hours
+                Weekly Task Summary
             </h2>
 
             <div className="flex justify-between items-center mb-6 flex-wrap">
@@ -321,7 +325,7 @@ const TimesheetReport = () => {
                     <select
                         value={filterOption}
                         onChange={(e) => setFilterOption(e.target.value)}
-                        className="border text-sm rounded px-2 py-1"
+                        className="border text-sm rounded pl-2 pr-8 py-1"
                     >
                         <option value="currentWeek">Current Week</option>
                         <option value="last4Weeks">Last 4 Weeks</option>
@@ -629,17 +633,29 @@ const TimesheetReport = () => {
 
                                     {isExpanded && (
                                         <tr className="bg-gray-100 dark:bg-gray-700 text-xs">
-                                            <td colSpan="7" className="py-3 px-4">
-                                                <div className="flex justify-between flex-wrap gap-4">
-                                                    <div>
-                                                        <div><strong>Work Area:</strong> {row.work_area || "—"}</div>
-                                                        <div><strong>Task Area:</strong> {row.task_area || "—"}</div>
-                                                        <div><strong>Ticket No.:</strong> {row.ticket_num || "—"}</div>
+                                            <td colSpan={7} className="py-3 px-4">
+                                                {/* 3-column grid: left info (fixed range), middle details (flex), right notes (fixed range) */}
+                                                <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,280px)_1fr_minmax(220px,260px)] gap-6 items-start">
+                                                    {/* Left: meta */}
+                                                    <div className="space-y-1">
+                                                        <div className="grid grid-cols-[95px_1fr] gap-x-2">
+                                                            <span className="font-semibold">Work Area:</span>
+                                                            <span className="break-words">{row.work_area || "—"}</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-[95px_1fr] gap-x-2">
+                                                            <span className="font-semibold">Task Area:</span>
+                                                            <span className="break-words">{row.task_area || "—"}</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-[95px_1fr] gap-x-2">
+                                                            <span className="font-semibold">Ticket No.:</span>
+                                                            <span className="break-words">{row.ticket_num || "—"}</span>
+                                                        </div>
                                                     </div>
 
-                                                    <div>
-                                                        <div className="font-semibold mb-1">Record Detail</div>
-                                                        <div className="grid grid-cols-8 gap-2 text-center">
+                                                    {/* Middle: weekly hours */}
+                                                    <div className="min-w-0">
+                                                        <div className="font-semibold mb-1">Activity Detail</div>
+                                                        <div className="grid grid-cols-8 gap-2 text-center font-mono tabular-nums">
                                                             <div>Mon<br />{row.monday_hours}</div>
                                                             <div>Tue<br />{row.tuesday_hours}</div>
                                                             <div>Wed<br />{row.wednesday_hours}</div>
@@ -651,16 +667,17 @@ const TimesheetReport = () => {
                                                         </div>
                                                     </div>
 
-                                                    <div className="flex flex-col justify-start mt-3">
+                                                    {/* Right: notes */}
+                                                    <div className="flex flex-col justify-start mt-1 md:mt-0 min-w-0">
                                                         <button
                                                             onClick={() => toggleNotes(idx)}
-                                                            className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 font-semibold px-3 py-1 rounded mb-2"
+                                                            className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 font-semibold px-3 py-1 rounded mb-2 self-start"
                                                         >
                                                             {showNote ? "Hide Notes" : "View Notes"}
                                                         </button>
 
                                                         {showNote && (
-                                                            <div className="text-sm italic text-gray-800 dark:text-gray-200">
+                                                            <div className="text-sm italic text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
                                                                 {row.notes || "No notes provided."}
                                                             </div>
                                                         )}
@@ -669,6 +686,7 @@ const TimesheetReport = () => {
                                             </td>
                                         </tr>
                                     )}
+
                                 </React.Fragment>
                             );
                         })}
@@ -716,4 +734,4 @@ const TimesheetReport = () => {
     );
 };
 
-export default TimesheetReport;
+export default WeeklyTimesheetReport;

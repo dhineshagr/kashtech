@@ -116,10 +116,10 @@ const TimesheetHeader = ({
       {/* View Report Button (Admin/Super Admin Only) Button is not best practice*/}
       {(userRole === "Admin" || userRole === "Super Admin") && (
         <button
-          onClick={() => navigate("/timesheet-report")}
+          onClick={() => navigate("/timesheet-weekly-hours-report")}
           className="ml-auto border text-purple-700 px-4 py-2 rounded hover:bg-purple-50 text-sm"
         >
-          View Report by Weekly Hours
+          Weekly Task Summary
         </button>
       )}
 
@@ -137,7 +137,7 @@ const TimesheetHeader = ({
           onClick={() => navigate("/timesheet-daily-hours-report")}
           className="ml-auto border text-purple-700 px-4 py-2 rounded hover:bg-purple-50 text-sm"
         >
-          View Report by Daily Total Hours
+          Daily Task Summary
         </button>
       )}
     </div>

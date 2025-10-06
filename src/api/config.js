@@ -1,4 +1,4 @@
-const BASE_URL = "http://20.127.197.227:5000/api"; // use an env variable to derive
+const BASE_URL = "http://localhost:5001/api"; // use an env variable to derive
 
 const API = {
   // 🔐 Auth
@@ -13,7 +13,7 @@ const API = {
   GET_EMPLOYEE_BY_ID: (empId) => `${BASE_URL}/employees/${empId}`,
 
   // 🕒 Timesheet APIs
-  TIMESHEET_REPORT: `${BASE_URL}/timesheet/report`,
+
   TIMESHEET_ADD_BATCH: `${BASE_URL}/timesheet/add-batch`,
   UPDATE_TIMESHEET_BATCH: `${BASE_URL}/timesheet/update-entry`,
   DELETE_TIMESHEET_ENTRY: (id) => `${BASE_URL}/timesheet/delete-entry/${id}`,
@@ -27,7 +27,10 @@ const API = {
   GET_ALL_EMPLOYEES: `${BASE_URL}/employees/allemployees`,
 
   TIMESHEET_DAILY_HOURS_REPORT: `${BASE_URL}/timesheet/daily-hours-report`,
-  TIMESHEET_DAILY_REPORT: `${BASE_URL}/timesheet/daily-report`,
+
+
+  TIMESHEET_REPORT: `${BASE_URL}/timesheet/weekly-report`, // Weekly report
+  TIMESHEET_DAILY_REPORT: `${BASE_URL}/timesheet/daily-report`, // Daily report
 
   // 🏢 Company & Project Management
   FETCH_MANAGE_CLIENTS: `${BASE_URL}/manageclients`,
@@ -35,6 +38,7 @@ const API = {
 
   GET_COMPANIES_BY_BILLABLE: (isBillable) =>
     `${BASE_URL}/timesheet/companies?billable=${isBillable}`,
+  GET_NON_BILLABLE_REASONS: `${BASE_URL}/timesheet/non-billable-reasons`,
   CLIENT_PROJECTS: `${BASE_URL}/dashboard/client-projects`,
 
   // 🛠️ Full Project Management APIs (for ManageProjects.jsx)

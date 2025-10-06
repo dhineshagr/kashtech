@@ -38,6 +38,9 @@ const DailyTimesheetReport = () => {
     const navigate = useNavigate();
 
     const fetchReport = async (customParams = {}) => {
+
+        console.log("Fetching report with params:", customParams);
+
         try {
             let url = API.TIMESHEET_DAILY_REPORT;
             let params = {};
@@ -71,6 +74,8 @@ const DailyTimesheetReport = () => {
                 alert("Session may have expired. Please log in again.");
                 return;
             }
+
+            console.log("Fetched Daily report data:", res.data);
 
             setReportData(Array.isArray(res.data) ? res.data : []);
             setCurrentPage(1);
@@ -148,9 +153,6 @@ const DailyTimesheetReport = () => {
         fetchReport(params);
         setShowFilters(false);
     };
-
-
-
 
     const toggleRow = (idx) => {
         setExpandedRows((prev) =>
@@ -433,7 +435,7 @@ const DailyTimesheetReport = () => {
             {/* Rest of your JSX stays unchanged... */}
 
             <h2 className="text-4xl font-bold mb-6 text-purple-900 dark:text-white">
-                Timesheet Report by Daily Hours
+                Daily Task Summary
             </h2>
 
             <div className="flex justify-between items-center mb-6 flex-wrap">
@@ -441,7 +443,7 @@ const DailyTimesheetReport = () => {
                     <select
                         value={filterOption}
                         onChange={(e) => setFilterOption(e.target.value)}
-                        className="border text-sm rounded px-2 py-1"
+                        className="border text-sm rounded pl-2 pr-8 py-1"
                     >
                         <option value="monthToDate">Month to Date</option>
                         <option value="lastMonth">Last Month</option>
@@ -742,17 +744,30 @@ const DailyTimesheetReport = () => {
 
                                     {isExpanded && (
                                         <tr className="bg-gray-100 dark:bg-gray-700 text-xs">
-                                            <td colSpan="6" className="py-3 px-4">
-                                                <div className="flex justify-between flex-wrap gap-4">
-                                                    <div>
-                                                        <div><strong>Work Area:</strong> {row.work_area || "—"}</div>
-                                                        <div><strong>Task Area:</strong> {row.task_area || "—"}</div>
-                                                        <div><strong>Ticket No.:</strong> {row.ticket_num || "—"}</div>
+                                            <td colSpan={6} className="py-3 px-4">
+                                                {/* 3-column grid: left info, middle details, right notes */}
+                                                <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,280px)_1fr_minmax(220px,260px)] gap-6 items-start">
+
+                                                    {/* Left: meta */}
+                                                    <div className="space-y-1">
+                                                        <div className="grid grid-cols-[95px_1fr] gap-x-2">
+                                                            <span className="font-semibold">Work Area:</span>
+                                                            <span className="break-words">{row.work_area || "—"}</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-[95px_1fr] gap-x-2">
+                                                            <span className="font-semibold">Task Area:</span>
+                                                            <span className="break-words">{row.task_area || "—"}</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-[95px_1fr] gap-x-2">
+                                                            <span className="font-semibold">Ticket No.:</span>
+                                                            <span className="break-words">{row.ticket_num || "—"}</span>
+                                                        </div>
                                                     </div>
 
-                                                    <div>
+                                                    {/* Middle: weekly hours */}
+                                                    <div className="min-w-0">
                                                         <div className="font-semibold mb-1">Record Detail</div>
-                                                        <div className="grid grid-cols-8 gap-2 text-center">
+                                                        <div className="grid grid-cols-8 gap-2 text-center font-mono tabular-nums">
                                                             <div>Mon<br />{row.monday_hours}</div>
                                                             <div>Tue<br />{row.tuesday_hours}</div>
                                                             <div>Wed<br />{row.wednesday_hours}</div>
@@ -764,16 +779,17 @@ const DailyTimesheetReport = () => {
                                                         </div>
                                                     </div>
 
-                                                    <div className="flex flex-col justify-start mt-3">
+                                                    {/* Right: notes */}
+                                                    <div className="flex flex-col justify-start mt-1 md:mt-0 min-w-0">
                                                         <button
                                                             onClick={() => toggleNotes(idx)}
-                                                            className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 font-semibold px-3 py-1 rounded mb-2"
+                                                            className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 font-semibold px-3 py-1 rounded mb-2 self-start"
                                                         >
                                                             {showNote ? "Hide Notes" : "View Notes"}
                                                         </button>
 
                                                         {showNote && (
-                                                            <div className="text-sm italic text-gray-800 dark:text-gray-200">
+                                                            <div className="text-sm italic text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
                                                                 {row.notes || "No notes provided."}
                                                             </div>
                                                         )}
@@ -782,6 +798,7 @@ const DailyTimesheetReport = () => {
                                             </td>
                                         </tr>
                                     )}
+
                                 </React.Fragment>
                             );
                         })}
