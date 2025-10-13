@@ -14,13 +14,18 @@ const ManageInvoices = () => {
     const [employees, setEmployees] = useState([]);
     const [roles, setRoles] = useState([]);
     const [search, setSearch] = useState("");
-    const [selectedInvoice, setSelectedInvoice] = useState(null);
-    const [showModal, setShowModal] = useState(false);
+   
     const [sortField, setSortField] = useState(null);
     const [sortOrder, setSortOrder] = useState("asc");
     const [currentPage, setCurrentPage] = useState(1);
     const rowsPerPage = 50;
     const token = localStorage.getItem("token");
+
+    const [selectedInvoice, setSelectedInvoice] = useState(null);
+    
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [showGenerateModal, setShowGenerateModal] = useState(false);
+
 
     useEffect(() => {
         fetchInvoices();
@@ -139,7 +144,7 @@ const ManageInvoices = () => {
                     className="bg-orange-500 text-white px-4 py-2 rounded-full font-semibold hover:bg-orange-600 text-sm flex items-center gap-2"
                     onClick={() => {
                         setSelectedInvoice(null); // Clear any previously selected invoice
-                        setShowModal(true);       // This will open the Add InvoiceModal
+                        setShowEditModal(true);       // This will open the Add InvoiceModal
                     }}
                 >
                     <FaPlus /> Add Invoice
@@ -193,11 +198,12 @@ const ManageInvoices = () => {
                                             className="text-xs text-purple-700 hover:text-purple-900 flex items-center gap-1"
                                             onClick={() => {
                                                 setSelectedInvoice(inv);
-                                                setTimeout(() => setShowModal(true), 0);
+                                                setTimeout(() => setShowEditModal(true), 0);
                                             }}
                                         >
                                             <FaEdit /> Edit
                                         </button>
+
                                         <button
                                             className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1"
                                             onClick={() => handleDelete(inv.invoice_id)}
@@ -226,12 +232,12 @@ const ManageInvoices = () => {
                 </div>
             </div>
 
-            {showModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-start pt-10">
-                    <div className="bg-white rounded-lg shadow-lg w-[90%] max-h-[90%] overflow-y-auto relative">
+            {showEditModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-start pt-5">
+                    <div className="bg-white rounded-lg shadow-lg w-[95%] h-[95%] overflow-y-auto relative">
                         <button
                             className="absolute top-3 right-4 text-xl text-gray-600 hover:text-black"
-                            onClick={() => setShowModal(false)}
+                            onClick={() => setShowEditModal(false)}
                         >
                             &times;
                         </button>
@@ -241,11 +247,11 @@ const ManageInvoices = () => {
                                 invoice={selectedInvoice}
                                 onClose={() => {
                                     setSelectedInvoice(null);
-                                    setShowModal(false);
+                                    setShowEditModal(false);
                                 }}
                                 onInvoiceUpdated={() => {
                                     fetchInvoices();        // ✅ Fetch fresh data
-                                    setShowModal(false);    // ✅ Close modal after update
+                                    setShowEditModal(false);    // ✅ Close modal after update
                                     setSelectedInvoice(null);
                                 }}
                                 companies={companies}
@@ -255,10 +261,10 @@ const ManageInvoices = () => {
                         ) : (
 
                             <InvoiceModal
-                                onClose={() => setShowModal(false)}
+                                onClose={() => setShowEditModal(false)}
                                 onInvoiceSaved={() => {
                                     fetchInvoices();         // 🔄 Refresh invoice list
-                                    setShowModal(false);     // ✅ Close modal
+                                    setShowEditModal(false);     // ✅ Close modal
                                 }}
                                 companies={companies}
                                 projects={projects}

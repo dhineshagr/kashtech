@@ -27,7 +27,7 @@ const DailyTimesheetReport = () => {
     const [isBillable, setIsBillable] = useState(true);
     const [isNonBillable, setIsNonBillable] = useState(false);
     const [clientList, setClientList] = useState([]);
-    const [projectList, setProjectList] = useState([]);
+    const [clientProjects, setClientProjects] = useState([]); 
     const [employeeList, setEmployeeList] = useState([]);
     const [selectedCompanyId, setSelectedCompanyId] = useState(null);
 
@@ -38,6 +38,9 @@ const DailyTimesheetReport = () => {
     const navigate = useNavigate();
 
     const fetchReport = async (customParams = {}) => {
+
+        console.log("Fetching report with params:", customParams);
+
         try {
             let url = API.TIMESHEET_DAILY_REPORT;
             let params = {};
@@ -72,6 +75,8 @@ const DailyTimesheetReport = () => {
                 return;
             }
 
+            console.log("Fetched Daily report data:", res.data);
+
             setReportData(Array.isArray(res.data) ? res.data : []);
             setCurrentPage(1);
         } catch (err) {
@@ -79,10 +84,78 @@ const DailyTimesheetReport = () => {
         }
     };
 
+    const buildStructuredFilters = () => {
+        return selectedClients.map(client => {
+            // find the client in your clientProjects list
+            const clientGroup = clientProjects.find(c => c.clientName === client);
+            if (!clientGroup) return { client, projects: [] };
+
+            // from the selectedProjects, get the ones that belong to this client
+            const matchingProjects = selectedProjects.filter(p =>
+            clientGroup.projects.some(cp => cp.project_category === p)
+            );
+
+            return { client, projects: matchingProjects }; // empty array = "all"
+        });
+    };
+
+
+
+    const buildFilterParams = () => {
+    const params = {};
+
+    // Clients
+    if (selectedClients.length > 0) {
+        params.clients = selectedClients.join(",");
+    }
+
+    // Projects
+    if (selectedProjects.length > 0) {
+        params.projects = selectedProjects;
+    }
+
+    // Employees
+    if (selectedEmployees.length > 0) {
+        params.employees = selectedEmployees.join(",");
+    }
+
+    // Billable flags
+    if (isBillable && !isNonBillable) params.billable = "true";
+    else if (!isBillable && isNonBillable) params.billable = "false";
+
+    // Date filters
+    if (filterOption === "monthToDate") {
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        params.startDate = format(start, "yyyy-MM-dd");
+        params.endDate = format(now, "yyyy-MM-dd");
+    } else if (filterOption === "lastMonth") {
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const end = new Date(now.getFullYear(), now.getMonth(), 0);
+        params.startDate = format(start, "yyyy-MM-dd");
+        params.endDate = format(end, "yyyy-MM-dd");
+    } else if (filterOption === "customRange" && customStartDate && customEndDate) {
+        params.startDate = format(customStartDate, "yyyy-MM-dd");
+        params.endDate = format(customEndDate, "yyyy-MM-dd");
+    }
+
+    const structuredFilters = buildStructuredFilters();
+        if (structuredFilters.length > 0) {
+        params.filters = JSON.stringify(structuredFilters);
+    }
+
+    return params;
+
+    };
+
+
+
 
     useEffect(() => {
-        fetchReport();
-    }, [filterOption, customStartDate, customEndDate]);
+    fetchReport(buildFilterParams());
+    }, [filterOption, customStartDate, customEndDate, selectedClients, selectedProjects, selectedEmployees, isBillable, isNonBillable]);
+
 
     useEffect(() => {
         fetchClientList();
@@ -101,55 +174,9 @@ const DailyTimesheetReport = () => {
 
 
     const applyFilters = () => {
-        const params = {};
-
-        // ✅ Clients
-        if (selectedClients.length > 0) {
-            params.clients = selectedClients.join(",");
-        }
-
-        // ✅ Projects
-        if (selectedProjects.length > 0) {
-            params.projects = selectedProjects.join(",");
-        }
-
-        // ✅ Employees
-        if (selectedEmployees.length > 0) {
-            params.employees = selectedEmployees.join(",");
-        }
-
-        // ✅ Billable Status — sent as string
-        if (isBillable && !isNonBillable) {
-            params.billable = "true";  // <-- changed from boolean to string
-        } else if (!isBillable && isNonBillable) {
-            params.billable = "false"; // <-- changed from boolean to string
-        }
-        // If both are selected or neither, billable will not be passed (shows all)
-
-        // ✅ Date Filters
-        if (filterOption === "monthToDate") {
-            const now = new Date();
-            const start = new Date(now.getFullYear(), now.getMonth(), 1);
-            params.startDate = format(start, "yyyy-MM-dd");
-            params.endDate = format(now, "yyyy-MM-dd");
-        } else if (filterOption === "lastMonth") {
-            const now = new Date();
-            const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-            const end = new Date(now.getFullYear(), now.getMonth(), 0);
-            params.startDate = format(start, "yyyy-MM-dd");
-            params.endDate = format(end, "yyyy-MM-dd");
-        } else if (filterOption === "customRange" && customStartDate && customEndDate) {
-            params.startDate = format(customStartDate, "yyyy-MM-dd");
-            params.endDate = format(customEndDate, "yyyy-MM-dd");
-        }
-
-        console.log("📤 Sending filter params:", params);
-
-        fetchReport(params);
-        setShowFilters(false);
+    fetchReport(buildFilterParams());
+    setShowFilters(false);
     };
-
-
 
 
     const toggleRow = (idx) => {
@@ -264,58 +291,73 @@ const DailyTimesheetReport = () => {
         }
     };
 
-    useEffect(() => {
-        const fetchInitialLists = async () => {
-            try {
-                const billableFlag = isBillable && !isNonBillable ? true :
-                    !isBillable && isNonBillable ? false : null;
+ useEffect(() => {
+  const fetchInitialLists = async () => {
+    try {
+      let clients = [];
 
-                // Fetch clients by billable status
-                if (billableFlag !== null) {
-                    const clientsRes = await axios.get(
-                        API.GET_CLIENTS_BY_BILLABLE(billableFlag),
-                        {
-                            headers: { Authorization: `Bearer ${token}` },
-                        }
-                    );
-                    const sortedClients = [...clientsRes.data].sort((a, b) =>
-                        a.company_name.localeCompare(b.company_name)
-                    );
-                    setClientList(sortedClients);
-                } else {
-                    setClientList([]);
-                }
+      // 🔹 Case 1: Only Billable
+      if (isBillable && !isNonBillable) {
+        const res = await axios.get(API.GET_CLIENTS_BY_BILLABLE(true), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        clients = res.data;
+      }
+      // 🔹 Case 2: Only Non-Billable
+      else if (!isBillable && isNonBillable) {
+        const res = await axios.get(API.GET_CLIENTS_BY_BILLABLE(false), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        clients = res.data;
+      }
+      // 🔹 Case 3: Both checked — merge both lists
+      else if (isBillable && isNonBillable) {
+        const [billableRes, nonBillableRes] = await Promise.all([
+          axios.get(API.GET_CLIENTS_BY_BILLABLE(true), {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          axios.get(API.GET_CLIENTS_BY_BILLABLE(false), {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
 
-                // Fetch employees
-                const empRes = await axios.get(API.GET_ALL_EMPLOYEES, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                const fullName = (person) => {
-                    if (!person || typeof person !== "object") return "";
-                    const first = person?.first_name ?? "";
-                    const last = person?.last_name ?? "";
-                    return `${first} ${last}`.trim();
-                };
+        // Merge and remove duplicates by company_id
+        const merged = [
+          ...billableRes.data,
+          ...nonBillableRes.data.filter(
+            (nb) => !billableRes.data.some((b) => b.company_id === nb.company_id)
+          ),
+        ];
 
-                const filteredEmps = Array.isArray(empRes.data)
-                    ? empRes.data.filter(e => e?.first_name || e?.last_name)
-                    : [];
+        clients = merged;
+      }
 
-                const sortedEmps = filteredEmps.sort((a, b) =>
-                    fullName(a).localeCompare(fullName(b))
-                );
+      // Sort alphabetically
+      const sortedClients = clients.sort((a, b) =>
+        a.company_name.localeCompare(b.company_name)
+      );
 
-                setEmployeeList(sortedEmps);
+      setClientList(sortedClients);
 
+      // ✅ Always refresh employee list too
+      const empRes = await axios.get(API.GET_ALL_EMPLOYEES, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const fullName = (person) =>
+        `${person.first_name ?? ""} ${person.last_name ?? ""}`.trim();
+      const sortedEmps = empRes.data
+        .filter((e) => e?.first_name || e?.last_name)
+        .sort((a, b) => fullName(a).localeCompare(fullName(b)));
+      setEmployeeList(sortedEmps);
 
-                setEmployeeList(sortedEmps);
-            } catch (error) {
-                console.error("❌ Error fetching lists:", error);
-            }
-        };
+    } catch (error) {
+      console.error("❌ Error fetching lists:", error);
+    }
+  };
 
-        fetchInitialLists();
-    }, [isBillable, isNonBillable]);
+  fetchInitialLists();
+}, [isBillable, isNonBillable]);
+
     // ✅ UPDATED FRONTEND FUNCTION
     const handleExportDailyExcel = async () => {
         try {
@@ -373,6 +415,19 @@ const DailyTimesheetReport = () => {
             console.error("❌ Failed to export daily Excel", err);
         }
     };
+
+
+    const removeClient = (clientToRemove) => {
+        setSelectedClients((prev) => prev.filter((c) => c !== clientToRemove));
+        setClientProjects((prev) => prev.filter((c) => c.clientName !== clientToRemove));
+        setSelectedProjects((prev) =>
+            prev.filter((proj) => {
+            const group = clientProjects.find((g) => g.projects.some((p) => p.project_category === proj));
+            return !group || group.clientName !== clientToRemove;
+            })
+        );
+    };
+
 
 
     const handleExportCSV = async () => {
@@ -433,7 +488,7 @@ const DailyTimesheetReport = () => {
             {/* Rest of your JSX stays unchanged... */}
 
             <h2 className="text-4xl font-bold mb-6 text-purple-900 dark:text-white">
-                Timesheet Report by Daily Hours
+                Daily Breakdown
             </h2>
 
             <div className="flex justify-between items-center mb-6 flex-wrap">
@@ -441,7 +496,7 @@ const DailyTimesheetReport = () => {
                     <select
                         value={filterOption}
                         onChange={(e) => setFilterOption(e.target.value)}
-                        className="border text-sm rounded px-2 py-1"
+                        className="border text-sm rounded pl-2 pr-8 py-1"
                     >
                         <option value="monthToDate">Month to Date</option>
                         <option value="lastMonth">Last Month</option>
@@ -510,72 +565,79 @@ const DailyTimesheetReport = () => {
 
                                         {/* Update in Client dropdown onChange */}
                                         <select
-                                            className="w-full border px-2 py-1 text-sm rounded"
-                                            onChange={async (e) => {
-                                                const selectedClient = e.target.value;
+                                        className="w-full border px-2 py-1 text-sm rounded"
+                                        onChange={async (e) => {
+                                            const selectedClient = e.target.value;
+                                            if (!selectedClient || selectedClients.includes(selectedClient)) return;
 
-                                                if (selectedClient && !selectedClients.includes(selectedClient)) {
-                                                    setSelectedClients([selectedClient]);  // ✅ Safely update
-                                                    setSelectedProjects([]);               // 🔄 Reset
-                                                    setProjectList([]);                    // 🔄 Clear
-                                                }
+                                            setSelectedClients((prev) => [...prev, selectedClient]);
 
-                                                const selectedObj = clientList.find(c => c.company_name === selectedClient);
-                                                if (selectedObj?.company_id) {
-                                                    try {
-                                                        const projRes = await axios.get(
-                                                            API.GET_PROJECTS_BY_COMPANY(selectedObj.company_id),
-                                                            {
-                                                                headers: { Authorization: `Bearer ${token}` },
-                                                            }
-                                                        );
-                                                        const sortedProjects = [...projRes.data].sort((a, b) =>
-                                                            a.project_category.localeCompare(b.project_category)
-                                                        );
-                                                        setProjectList(sortedProjects);
-                                                    } catch (err) {
-                                                        console.error("❌ Error fetching projects", err);
-                                                    }
-                                                }
-                                            }}
+                                            const selectedObj = clientList.find(c => c.company_name === selectedClient);
+                                            if (!selectedObj?.company_id) return;
 
+                                            try {
+                                            const projRes = await axios.get(
+                                                API.GET_PROJECTS_BY_COMPANY(selectedObj.company_id),
+                                                { headers: { Authorization: `Bearer ${token}` } }
+                                            );
+
+                                            const sortedProjects = projRes.data.sort((a, b) =>
+                                                a.project_category.localeCompare(b.project_category)
+                                            );
+
+                                            setClientProjects((prev) => {
+                                                // remove old group for this client if re-selected
+                                                const filtered = prev.filter(p => p.clientName !== selectedClient);
+                                                return [...filtered, { clientName: selectedClient, projects: sortedProjects }];
+                                            });
+                                            } catch (err) {
+                                            console.error("❌ Error fetching projects", err);
+                                            }
+                                        }}
                                         >
-                                            <option value="">Select Client</option>
-                                            {clientList.map((client) => (
-                                                <option key={client.company_id} value={client.company_name}>
-                                                    {client.company_name}
-                                                </option>
-                                            ))}
+                                        <option value="">Select Client</option>
+                                        {clientList.map((client) => (
+                                            <option key={client.company_id} value={client.company_name}>
+                                            {client.company_name}
+                                            </option>
+                                        ))}
                                         </select>
+
 
                                         <div className="mt-2 flex flex-wrap gap-1">
                                             {selectedClients.map((client, idx) => (
                                                 <span key={idx} className="bg-purple-100 text-purple-800 px-2 py-1 text-xs rounded-full">
                                                     {client}{" "}
-                                                    <button onClick={() => setSelectedClients(selectedClients.filter((c) => c !== client))}>✕</button>
+                                                    <button onClick={() => removeClient(client)}>✕</button>
                                                 </span>
                                             ))}
                                         </div>
 
-                                        {selectedClients.length > 0 && projectList.length > 0 && (
-                                            <select
-                                                className="w-full mt-2 border px-2 py-1 text-sm rounded"
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    if (val && !selectedProjects.includes(val)) {
-                                                        setSelectedProjects([...selectedProjects, val]);
-                                                    }
-                                                    e.target.selectedIndex = 0;
-                                                }}
-                                            >
-                                                <option value="">Select Project</option>
-                                                {projectList.map((proj) => (
-                                                    <option key={proj.sow_id} value={proj.project_category}>
-                                                        {proj.project_category}
-                                                    </option>
+                                        {selectedClients.length > 0 && clientProjects.length > 0 && (
+                                        <select
+                                            className="w-full mt-2 border px-2 py-1 text-sm rounded"
+                                            onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val && !selectedProjects.includes(val)) {
+                                                setSelectedProjects([...selectedProjects, val]);
+                                            }
+                                            e.target.selectedIndex = 0;
+                                            }}
+                                        >
+                                            <option value="">Select Project</option>
+
+                                            {clientProjects.map((group, idx) => (
+                                            <optgroup key={idx} label={group.clientName}>
+                                                {group.projects.map((proj) => (
+                                                <option key={proj.sow_id} value={proj.project_category}>
+                                                    {proj.project_category}
+                                                </option>
                                                 ))}
-                                            </select>
+                                            </optgroup>
+                                            ))}
+                                        </select>
                                         )}
+
 
                                         <div className="mt-2 flex flex-wrap gap-1">
                                             {selectedProjects.map((proj, idx) => (
@@ -682,7 +744,6 @@ const DailyTimesheetReport = () => {
                             <th className="py-3 px-4 font-semibold cursor-pointer" onClick={() => handleSort("project_category")}>
                                 Project Name
                             </th>
-                            <th className="py-3 px-4 font-semibold text-center">Actions</th>
                             <th className="py-3 px-4 font-semibold">Details</th>
                         </tr>
                     </thead>
@@ -707,32 +768,11 @@ const DailyTimesheetReport = () => {
                                 <React.Fragment key={idx}>
                                     <tr className="border-b dark:border-gray-700">
                                         <td className="py-2 px-4">{row.employee_name}</td>
-                                        <td className="py-2 px-4">{row.billable ? "Billable" : "Non-Billable"}</td>
+                                        <td className="py-2 px-4">
+                                            {String(row.billable).toLowerCase() === "true" ? "Billable" : "Non-Billable"}
+                                        </td>
                                         <td className="py-2 px-4">{row.company_name}</td>
                                         <td className="py-2 px-4">{row.project_category}</td>
-                                        <td className="py-2 px-4 text-center">
-                                            <button
-                                                onClick={() => {
-                                                    localStorage.setItem("edit_emp_id", row.emp_id);
-
-                                                    // Normalize to Monday
-                                                    const rawDate = new Date(row.period_start_date);
-                                                    const day = rawDate.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-                                                    const diffToMonday = (day + 6) % 7; // Converts Sunday (0) -> 6, Monday (1) -> 0, ..., Saturday (6) -> 5
-                                                    rawDate.setDate(rawDate.getDate() - diffToMonday);
-
-                                                    const mondayDate = rawDate.toISOString().slice(0, 10);
-                                                    localStorage.setItem("edit_week_start", mondayDate);
-
-                                                    navigate("/manage-timesheet");
-                                                }}
-                                                className="text-xs flex items-center gap-1 text-purple-700 hover:text-purple-900 mx-auto"
-                                            >
-                                                <FaEdit /> Edit
-                                            </button>
-
-
-                                        </td>
                                         <td className="py-2 px-4 text-purple-600 hover:underline text-sm cursor-pointer">
                                             <button onClick={() => toggleRow(idx)}>
                                                 {isExpanded ? "− Less Info" : "+ More Info"}
@@ -742,17 +782,30 @@ const DailyTimesheetReport = () => {
 
                                     {isExpanded && (
                                         <tr className="bg-gray-100 dark:bg-gray-700 text-xs">
-                                            <td colSpan="6" className="py-3 px-4">
-                                                <div className="flex justify-between flex-wrap gap-4">
-                                                    <div>
-                                                        <div><strong>Work Area:</strong> {row.work_area || "—"}</div>
-                                                        <div><strong>Task Area:</strong> {row.task_area || "—"}</div>
-                                                        <div><strong>Ticket No.:</strong> {row.ticket_num || "—"}</div>
+                                            <td colSpan={6} className="py-3 px-4">
+                                                {/* 3-column grid: left info, middle details, right notes */}
+                                                <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,280px)_1fr_minmax(220px,260px)] gap-6 items-start">
+
+                                                    {/* Left: meta */}
+                                                    <div className="space-y-1">
+                                                        <div className="grid grid-cols-[95px_1fr] gap-x-2">
+                                                            <span className="font-semibold">Work Area:</span>
+                                                            <span className="break-words">{row.work_area || "—"}</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-[95px_1fr] gap-x-2">
+                                                            <span className="font-semibold">Task Area:</span>
+                                                            <span className="break-words">{row.task_area || "—"}</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-[95px_1fr] gap-x-2">
+                                                            <span className="font-semibold">Ticket No.:</span>
+                                                            <span className="break-words">{row.ticket_num || "—"}</span>
+                                                        </div>
                                                     </div>
 
-                                                    <div>
+                                                    {/* Middle: weekly hours */}
+                                                    <div className="min-w-0">
                                                         <div className="font-semibold mb-1">Record Detail</div>
-                                                        <div className="grid grid-cols-8 gap-2 text-center">
+                                                        <div className="grid grid-cols-8 gap-2 text-center font-mono tabular-nums">
                                                             <div>Mon<br />{row.monday_hours}</div>
                                                             <div>Tue<br />{row.tuesday_hours}</div>
                                                             <div>Wed<br />{row.wednesday_hours}</div>
@@ -764,16 +817,17 @@ const DailyTimesheetReport = () => {
                                                         </div>
                                                     </div>
 
-                                                    <div className="flex flex-col justify-start mt-3">
+                                                    {/* Right: notes */}
+                                                    <div className="flex flex-col justify-start mt-1 md:mt-0 min-w-0">
                                                         <button
                                                             onClick={() => toggleNotes(idx)}
-                                                            className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 font-semibold px-3 py-1 rounded mb-2"
+                                                            className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 font-semibold px-3 py-1 rounded mb-2 self-start"
                                                         >
                                                             {showNote ? "Hide Notes" : "View Notes"}
                                                         </button>
 
                                                         {showNote && (
-                                                            <div className="text-sm italic text-gray-800 dark:text-gray-200">
+                                                            <div className="text-sm italic text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
                                                                 {row.notes || "No notes provided."}
                                                             </div>
                                                         )}
@@ -782,6 +836,7 @@ const DailyTimesheetReport = () => {
                                             </td>
                                         </tr>
                                     )}
+
                                 </React.Fragment>
                             );
                         })}

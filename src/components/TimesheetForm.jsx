@@ -21,31 +21,59 @@ const TimesheetForm = ({
   const [companyOptions, setCompanyOptions] = useState([]);
   const [projectOptions, setProjectOptions] = useState([]);
   const [areaOptions, setAreaOptions] = useState({ work: [], task: [] });
+
+  const [nbReasons, setNbReasons] = useState([]);
+  const [selectedNbReason, setSelectedNbReason] = useState(""); // uuid string
+  const [nbIsClientTime, setNbIsClientTime] = useState(false);
+
   const token = localStorage.getItem("token");
 
   // 🔁 Fetch companies when billable toggle changes
   useEffect(() => {
-    const fetchCompanies = async () => {
-      try {
-        const res = await axios.get(API.GET_COMPANIES_BY_BILLABLE(isBillable), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+    
+    if (isBillable) {
+      const fetchCompanies = async () => {
+        try {
+          const res = await axios.get(API.GET_COMPANIES_BY_BILLABLE(isBillable), {
+            headers: { Authorization: `Bearer ${token}` },
+          });
 
-        console.log("Fetched companies:", res.data);
+          console.log("Fetched companies:", res.data);
 
-        setCompanyOptions(res.data);
-        setCompany("");
-        setProject("");
-        setProjectOptions([]);
-        setWorkArea("");
-        setTaskArea("");
-        setAreaOptions({ work: [], task: [] });
-      } catch (err) {
-        console.error("❌ Failed to fetch companies:", err);
-      }
-    };
+          setCompanyOptions(res.data);
+          setCompany("");
+          setProject("");
+          setProjectOptions([]);
+          setWorkArea("");
+          setTaskArea("");
+          setAreaOptions({ work: [], task: [] });
 
-    fetchCompanies();
+          setNbReasons([]);
+          setSelectedNbReason("");
+        } catch (err) {
+          console.error("❌ Failed to fetch companies:", err);
+        }
+      };
+
+      fetchCompanies();
+    } else {
+      const fetchNbReasons = async () => {
+        try {
+          const res = await axios.get(API.GET_NON_BILLABLE_REASONS, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          console.log("Fetched NB reasons:", res.data);
+          setNbReasons(res.data || []);
+          setSelectedNbReason("");
+        } catch (err) {
+          console.error("❌ Failed to fetch non-billable reasons:", err);
+        }
+      };
+
+      fetchNbReasons();
+    }
+
+    
   }, [isBillable]);
 
   // 🔁 Fetch projects when company changes
@@ -115,10 +143,39 @@ const TimesheetForm = ({
     fetchTaskAreas();
   }, [workArea]);
 
-  const handleClick = () => {
-    if (!company || !project) {
-      alert("Please select Company and Project before adding.");
+  useEffect(() => {
+    if (!selectedNbReason) {
+      setNbIsClientTime(false);
       return;
+    }
+
+    const match = nbReasons.find(r => r.uuid === selectedNbReason);
+    if (match && match.non_billable_reason.toLowerCase().includes("client time")) {
+      setNbIsClientTime(true);
+    } else {
+      setNbIsClientTime(false);
+    }
+  }, [selectedNbReason, nbReasons]);
+
+  const handleClick = () => {
+
+    const selectedReasonObj = nbReasons.find(r => r.uuid === selectedNbReason);
+
+    if (isBillable) {
+      if (!company || !project) {
+        alert("Please select Company and Project before adding.");
+        return;
+      }
+    } else {
+      if (!selectedNbReason) {
+        alert("Please select a Non-Billable Reason.");
+        return;
+      }
+      // If it's "Client Time (Non-Billable)", require company & project as well
+      if (nbIsClientTime && (!company || !project)) {
+        alert("For Client Time (Non-Billable), please select Company and Project.");
+        return;
+      }
     }
 
     const companyName =
@@ -127,6 +184,7 @@ const TimesheetForm = ({
       projectOptions.find((p) => p.sow_id === project)?.project_category || "";
 
     handleAddToSheet({
+      billable: isBillable,
       company,
       companyName,
       project,
@@ -134,8 +192,14 @@ const TimesheetForm = ({
       workArea,
       taskArea,
       ticket,
+      nonBillableReasonUuid: selectedReasonObj?.uuid || null,
+      nonBillableReason: selectedReasonObj?.non_billable_reason || null,
     });
   };
+
+  const isClientTimeNB = nbReasons.some(
+    (r) => r.uuid === selectedNbReason && r.non_billable_reason === "Client Time (Non-Billable)"
+  );
 
   return (
     <>
@@ -160,8 +224,27 @@ const TimesheetForm = ({
           </button>
         </div>
 
+        {/* Non-Billable Reason */}
+        {!isBillable && (
+          <div className="flex flex-col text-sm">
+            <label className="mb-1 font-medium">*Reason</label>
+            <select
+              value={selectedNbReason}
+              onChange={(e) => setSelectedNbReason(e.target.value)}
+              className="border rounded px-3 py-2 min-w-[220px]"
+            >
+              <option value="">Select Reason</option>
+              {nbReasons.map((r) => (
+                <option key={r.uuid} value={r.uuid}>
+                  {r.non_billable_reason}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Company Selector */}
-        {selectedWeek && (
+        {selectedWeek && (isBillable || nbIsClientTime) && (
           <div className="flex flex-col text-sm">
             <label className="mb-1 font-medium">*Company</label>
             <select
@@ -180,13 +263,13 @@ const TimesheetForm = ({
         )}
 
         {/* Project Selector */}
-        {selectedWeek && (
+       {selectedWeek && (isBillable || nbIsClientTime) && (
           <div className="flex flex-col text-sm">
             <label className="mb-1 font-medium">*Project</label>
             <select
               value={project}
               onChange={(e) => setProject(e.target.value)}
-              className="border rounded px-3 py-2 min-w-[180px]"
+              className="border rounded pl-2 pr-8 py-2"
             >
               <option value="">Select Project</option>
               {projectOptions.map((p) => (
@@ -199,6 +282,7 @@ const TimesheetForm = ({
         )}
 
         {/* Ticket Number */}
+        {selectedWeek && (isBillable || nbIsClientTime) && (
         <div className="flex flex-col text-sm">
           <label className="mb-1 font-medium">Ticket No.</label>
           <input
@@ -208,6 +292,7 @@ const TimesheetForm = ({
             placeholder="Enter ticket number"
           />
         </div>
+        )}
 
         {/* Add Button if No Work Areas */}
         {areaOptions.work.length === 0 && (
@@ -249,7 +334,7 @@ const TimesheetForm = ({
               value={taskArea}
               onChange={(e) => setTaskArea(e.target.value)}
               disabled={!workArea || areaOptions.task.length === 0}
-              className="border rounded px-3 py-2 min-w-[180px]"
+              className="border rounded px-3 py-2 pr-10 min-w-[180px]"
             >
               <option value="">
                 {workArea

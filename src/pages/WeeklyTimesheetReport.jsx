@@ -1,3 +1,4 @@
+// WeeklyTimesheetReport.jsx for Weekly Hours Report
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -11,7 +12,7 @@ import API from "../api/config";
 import { format, startOfWeek, endOfWeek, subWeeks } from "date-fns";
 
 
-const TimesheetReport = () => {
+const WeeklyTimesheetReport = () => {
     const [reportData, setReportData] = useState([]);
     const [expandedRows, setExpandedRows] = useState([]);
     const [visibleNotes, setVisibleNotes] = useState([]);
@@ -29,10 +30,11 @@ const TimesheetReport = () => {
     const [clientList, setClientList] = useState([]);
     const [projectList, setProjectList] = useState([]);
     const [employeeList, setEmployeeList] = useState([]);
+    const [clientProjects, setClientProjects] = useState([]);
     const [selectedCompanyId, setSelectedCompanyId] = useState(null);
 
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 15;
+    const itemsPerPage = 50;
 
     const token = localStorage.getItem("token");
     const navigate = useNavigate();
@@ -55,17 +57,54 @@ const TimesheetReport = () => {
                 return;
             }
 
+            console.log("Fetched Weekly report data:", res.data);
+
             setReportData(Array.isArray(res.data) ? res.data : []);
             setCurrentPage(1);
+
         } catch (err) {
             console.error("❌ Failed to fetch report data", err);
         }
     };
 
+   const buildFilterParams = () => {
+  const params = {};
 
-    useEffect(() => { // Use effect isn't used to fetch data in a well built react system
-        fetchReport();
-    }, [filterOption, customStartDate, customEndDate]);
+  // Build structured filters (client–project mapping)
+  const structuredFilters = selectedClients.map((client) => {
+    const group = clientProjects.find((g) => g.clientName === client);
+    const relatedProjects = selectedProjects.filter((proj) =>
+      group?.projects?.some((p) => p.project_category === proj)
+    );
+    return { client, projects: relatedProjects };
+  });
+
+  if (structuredFilters.length > 0) {
+    params.filters = JSON.stringify(structuredFilters);
+  }
+
+  // Employees
+  if (selectedEmployees.length > 0) {
+    params.employees = selectedEmployees.join(",");
+  }
+
+  // Billable logic (covers all 3 states)
+  if (isBillable && !isNonBillable) params.billable = "true";
+  else if (!isBillable && isNonBillable) params.billable = "false";
+  else if (isBillable && isNonBillable) delete params.billable; // show all
+
+  // Weekly date params
+  Object.assign(params, buildWeekDateParams());
+
+  return params;
+};
+
+
+
+    useEffect(() => {
+        fetchReport(buildFilterParams());
+    }, [filterOption, customStartDate, customEndDate, selectedClients, selectedProjects, selectedEmployees, isBillable, isNonBillable]);
+
 
     useEffect(() => {
         fetchClientList();
@@ -79,31 +118,40 @@ const TimesheetReport = () => {
         setIsBillable(true);
         setIsNonBillable(false);
 
-        fetchReport(); // ✅ fetch base data again with default params
+        fetchReport(buildFilterParams()); // ✅ refetch with base/default params
     };
+
 
 
     const applyFilters = () => {
-        const params = {};
-
-        if (selectedClients.length > 0) params.clients = selectedClients.join(",");
-        if (selectedProjects.length > 0) params.projects = selectedProjects.join(",");
-        if (selectedEmployees.length > 0) params.employees = selectedEmployees.join(",");
-
-        if (isBillable && !isNonBillable) params.billable = "true";
-        else if (!isBillable && isNonBillable) params.billable = "false";
-
-        // Weekly date params
-        Object.assign(params, buildWeekDateParams());
-
-        fetchReport(params);
+        fetchReport(buildFilterParams());
         setShowFilters(false);
     };
+
 
     const weekBounds = (date) => ({
         start: startOfWeek(date, { weekStartsOn: 1 }), // Monday
         end: endOfWeek(date, { weekStartsOn: 1 }),     // Sunday
     });
+
+const removeClient = (clientToRemove) => {
+  setSelectedClients((prev) => prev.filter((c) => c !== clientToRemove));
+  setClientProjects((prev) => prev.filter((c) => c.clientName !== clientToRemove));
+
+  setSelectedProjects((prev) =>
+    prev.filter((proj) => {
+      const group = clientProjects.find((g) =>
+        g.projects.some((p) => p.project_category === proj)
+      );
+      return !group || group.clientName !== clientToRemove;
+    })
+  );
+
+  // 🔁 Optionally, refetch report after client removal
+  fetchReport(buildFilterParams());
+};
+
+
 
     const buildWeekDateParams = () => {
         const now = new Date();
@@ -255,65 +303,96 @@ const TimesheetReport = () => {
         }
     };
 
-    useEffect(() => {
-        const fetchInitialLists = async () => {
-            try {
-                const billableFlag = isBillable && !isNonBillable ? true :
-                    !isBillable && isNonBillable ? false : null;
 
-                // Fetch clients by billable status
-                if (billableFlag !== null) {
-                    const clientsRes = await axios.get(
-                        API.GET_CLIENTS_BY_BILLABLE(billableFlag),
-                        {
-                            headers: { Authorization: `Bearer ${token}` },
-                        }
-                    );
-                    const sortedClients = [...clientsRes.data].sort((a, b) =>
-                        a.company_name.localeCompare(b.company_name)
-                    );
-                    setClientList(sortedClients);
-                } else {
-                    setClientList([]);
-                }
+useEffect(() => {
+  const fetchInitialLists = async () => {
+    try {
+      let clients = [];
 
-                // Fetch employees
-                const empRes = await axios.get(API.GET_ALL_EMPLOYEES, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                const fullName = (person) => {
-                    if (!person || typeof person !== "object") return "";
-                    const first = person?.first_name ?? "";
-                    const last = person?.last_name ?? "";
-                    return `${first} ${last}`.trim();
-                };
+      // 🔁 Fetch based on billable/non-billable toggles
+      if (isBillable && isNonBillable) {
+        const [billableRes, nonBillableRes] = await Promise.all([
+          axios.get(API.GET_CLIENTS_BY_BILLABLE(true), {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          axios.get(API.GET_CLIENTS_BY_BILLABLE(false), {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+        clients = [...billableRes.data, ...nonBillableRes.data];
+      } else if (isBillable && !isNonBillable) {
+        const res = await axios.get(API.GET_CLIENTS_BY_BILLABLE(true), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        clients = res.data;
+      } else if (!isBillable && isNonBillable) {
+        const res = await axios.get(API.GET_CLIENTS_BY_BILLABLE(false), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        clients = res.data;
+      }
 
-                const filteredEmps = Array.isArray(empRes.data)
-                    ? empRes.data.filter(e => e?.first_name || e?.last_name)
-                    : [];
+      // ✅ Deduplicate and sort client list
+      const sortedClients = clients
+        .filter(
+          (v, i, a) => a.findIndex((t) => t.company_id === v.company_id) === i
+        )
+        .sort((a, b) => a.company_name.localeCompare(b.company_name));
 
-                const sortedEmps = filteredEmps.sort((a, b) =>
-                    fullName(a).localeCompare(fullName(b))
-                );
+      setClientList(sortedClients);
 
-                setEmployeeList(sortedEmps);
+      // ✅ KEEP existing selections intact — do not clear them
+      // (Removed the block that was filtering selectedClients / selectedProjects)
+
+      // 🔁 Fetch employees (keep this part)
+      const empRes = await axios.get(API.GET_ALL_EMPLOYEES, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const fullName = (person) => {
+        if (!person || typeof person !== "object") return "";
+        const first = person?.first_name ?? "";
+        const last = person?.last_name ?? "";
+        return `${first} ${last}`.trim();
+      };
+
+      const filteredEmps = Array.isArray(empRes.data)
+        ? empRes.data.filter((e) => e?.first_name || e?.last_name)
+        : [];
+
+      const sortedEmps = filteredEmps.sort((a, b) =>
+        fullName(a).localeCompare(fullName(b))
+      );
+
+      setEmployeeList(sortedEmps);
+    } catch (error) {
+      console.error("❌ Error fetching lists:", error);
+    }
+  };
+
+  fetchInitialLists();
+
+  // ✅ Instantly refetch report whenever billable toggles change
+  fetchReport(buildFilterParams());
+}, [isBillable, isNonBillable]);
 
 
-                setEmployeeList(sortedEmps);
-            } catch (error) {
-                console.error("❌ Error fetching lists:", error);
-            }
-        };
+const handleToggleBillable = (type) => {
+  if (type === "billable") setIsBillable((prev) => !prev);
+  if (type === "nonBillable") setIsNonBillable((prev) => !prev);
+  // Auto-refresh report immediately
+  fetchReport(buildFilterParams());
+};
 
-        fetchInitialLists();
-    }, [isBillable, isNonBillable]);
+
+    
 
     return (
         <div className="min-h-screen text-gray-800 dark:text-white px-6 py-6">
             {/* Rest of your JSX stays unchanged... */}
 
             <h2 className="text-4xl font-bold mb-6 text-purple-900 dark:text-white">
-                Timesheet Report by Weekly Hours
+                Weekly Task Summary
             </h2>
 
             <div className="flex justify-between items-center mb-6 flex-wrap">
@@ -321,7 +400,7 @@ const TimesheetReport = () => {
                     <select
                         value={filterOption}
                         onChange={(e) => setFilterOption(e.target.value)}
-                        className="border text-sm rounded px-2 py-1"
+                        className="border text-sm rounded pl-2 pr-8 py-1"
                     >
                         <option value="currentWeek">Current Week</option>
                         <option value="last4Weeks">Last 4 Weeks</option>
@@ -377,12 +456,26 @@ const TimesheetReport = () => {
                                     {/* Billable Type */}
                                     <div>
                                         <p className="font-bold text-sm text-purple-900 dark:text-white">Type</p>
-                                        <label className="block text-sm">
-                                            <input type="checkbox" className="mr-2" checked={isBillable} onChange={() => setIsBillable(!isBillable)} /> Billable
-                                        </label>
-                                        <label className="block text-sm">
-                                            <input type="checkbox" className="mr-2" checked={isNonBillable} onChange={() => setIsNonBillable(!isNonBillable)} /> Non-Billable
-                                        </label>
+<label className="block text-sm">
+  <input
+    type="checkbox"
+    className="mr-2"
+    checked={isBillable}
+    onChange={() => handleToggleBillable("billable")}
+  />
+  Billable
+</label>
+
+<label className="block text-sm">
+  <input
+    type="checkbox"
+    className="mr-2"
+    checked={isNonBillable}
+    onChange={() => handleToggleBillable("nonBillable")}
+  />
+  Non-Billable
+</label>
+
                                     </div>
 
                                     {/* Clients and Projects */}
@@ -390,82 +483,87 @@ const TimesheetReport = () => {
                                         <p className="font-bold text-sm text-purple-900 dark:text-white">Client and Project</p>
 
                                         {/* Update in Client dropdown onChange */}
-                                        <select
-                                            className="w-full border px-2 py-1 text-sm rounded"
-                                            onChange={async (e) => {
-                                                const selectedClient = e.target.value;
+                                     <select
+                                        className="w-full border px-2 py-1 text-sm rounded"
+                                        onChange={async (e) => {
+                                            const selectedClient = e.target.value;
+                                            if (!selectedClient || selectedClients.includes(selectedClient)) return;
 
-                                                if (selectedClient && !selectedClients.includes(selectedClient)) {
-                                                    setSelectedClients([selectedClient]);  // ✅ Safely update
-                                                    setSelectedProjects([]);               // 🔄 Reset
-                                                    setProjectList([]);                    // 🔄 Clear
-                                                }
+                                            setSelectedClients((prev) => [...prev, selectedClient]);
 
-                                                const selectedObj = clientList.find(c => c.company_name === selectedClient);
-                                                if (selectedObj?.company_id) {
-                                                    try {
-                                                        const projRes = await axios.get(
-                                                            API.GET_PROJECTS_BY_COMPANY(selectedObj.company_id),
-                                                            {
-                                                                headers: { Authorization: `Bearer ${token}` },
-                                                            }
-                                                        );
-                                                        const sortedProjects = [...projRes.data].sort((a, b) =>
-                                                            a.project_category.localeCompare(b.project_category)
-                                                        );
-                                                        setProjectList(sortedProjects);
-                                                    } catch (err) {
-                                                        console.error("❌ Error fetching projects", err);
-                                                    }
-                                                }
-                                            }}
+                                            const selectedObj = clientList.find(c => c.company_name === selectedClient);
+                                            if (!selectedObj?.company_id) return;
 
+                                            try {
+                                            const projRes = await axios.get(
+                                                API.GET_PROJECTS_BY_COMPANY(selectedObj.company_id),
+                                                { headers: { Authorization: `Bearer ${token}` } }
+                                            );
+
+                                            const sortedProjects = projRes.data.sort((a, b) =>
+                                                a.project_category.localeCompare(b.project_category)
+                                            );
+
+                                            setClientProjects((prev) => {
+                                                const filtered = prev.filter(p => p.clientName !== selectedClient);
+                                                return [...filtered, { clientName: selectedClient, projects: sortedProjects }];
+                                            });
+                                            } catch (err) {
+                                            console.error("❌ Error fetching projects", err);
+                                            }
+                                        }}
                                         >
-                                            <option value="">Select Client</option>
-                                            {clientList.map((client) => (
-                                                <option key={client.company_id} value={client.company_name}>
-                                                    {client.company_name}
-                                                </option>
-                                            ))}
+                                        <option value="">Select Client</option>
+                                        {clientList.map((client) => (
+                                            <option key={client.company_id} value={client.company_name}>
+                                            {client.company_name}
+                                            </option>
+                                        ))}
                                         </select>
+
 
                                         <div className="mt-2 flex flex-wrap gap-1">
                                             {selectedClients.map((client, idx) => (
                                                 <span key={idx} className="bg-purple-100 text-purple-800 px-2 py-1 text-xs rounded-full">
                                                     {client}{" "}
-                                                    <button onClick={() => setSelectedClients(selectedClients.filter((c) => c !== client))}>✕</button>
+                                                    <button onClick={() => removeClient(client)}>✕</button>
                                                 </span>
                                             ))}
                                         </div>
 
-                                        {selectedClients.length > 0 && projectList.length > 0 && (
-                                            <select
-                                                className="w-full mt-2 border px-2 py-1 text-sm rounded"
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    if (val && !selectedProjects.includes(val)) {
-                                                        setSelectedProjects([...selectedProjects, val]);
-                                                    }
-                                                    e.target.selectedIndex = 0;
-                                                }}
-                                            >
-                                                <option value="">Select Project</option>
-                                                {projectList.map((proj) => (
-                                                    <option key={proj.sow_id} value={proj.project_category}>
-                                                        {proj.project_category}
-                                                    </option>
+                                    {selectedClients.length > 0 && clientProjects.length > 0 && (
+                                        <select
+                                            className="w-full mt-2 border px-2 py-1 text-sm rounded"
+                                            onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val && !selectedProjects.includes(val)) {
+                                                setSelectedProjects([...selectedProjects, val]);
+                                            }
+                                            e.target.selectedIndex = 0;
+                                            }}
+                                        >
+                                            <option value="">Select Project</option>
+                                            {clientProjects.map((group, idx) => (
+                                            <optgroup key={idx} label={group.clientName}>
+                                                {group.projects.map((proj) => (
+                                                <option key={proj.sow_id} value={proj.project_category}>
+                                                    {proj.project_category}
+                                                </option>
                                                 ))}
-                                            </select>
-                                        )}
+                                            </optgroup>
+                                            ))}
+                                        </select>
+                                    )}
+
 
                                         <div className="mt-2 flex flex-wrap gap-1">
-                                            {selectedProjects.map((proj, idx) => (
-                                                <span key={idx} className="bg-purple-100 text-purple-800 px-2 py-1 text-xs rounded-full">
-                                                    {proj}{" "}
-                                                    <button onClick={() => setSelectedProjects(selectedProjects.filter((p) => p !== proj))}>✕</button>
-                                                </span>
-                                            ))}
+                                        {selectedProjects.map((proj, idx) => (
+                                            <span key={idx} className="bg-purple-100 text-purple-800 px-2 py-1 text-xs rounded-full">
+                                            {proj} <button onClick={() => setSelectedProjects(selectedProjects.filter((p) => p !== proj))}>✕</button>
+                                            </span>
+                                        ))}
                                         </div>
+
                                     </div>
 
                                     {/* Employees */}
@@ -566,7 +664,6 @@ const TimesheetReport = () => {
                             <th className="py-3 px-4 font-semibold cursor-pointer" onClick={() => handleSort("project_category")}>
                                 Project Name
                             </th>
-                            <th className="py-3 px-4 font-semibold text-center">Actions</th>
                             <th className="py-3 px-4 font-semibold">Details</th>
                         </tr>
                     </thead>
@@ -594,32 +691,11 @@ const TimesheetReport = () => {
                                             {format(startDate, "MMM d")} - {format(endDate, "MMM d")}
                                         </td>
                                         <td className="py-2 px-4">{row.employee_name}</td>
-                                        <td className="py-2 px-4">{row.billable ? "Billable" : "Non-Billable"}</td>
+                                        <td className="py-2 px-4">
+                                        {String(row.billable).toLowerCase() === "true" ? "Billable" : "Non-Billable"}
+                                        </td>
                                         <td className="py-2 px-4">{row.company_name}</td>
                                         <td className="py-2 px-4">{row.project_category}</td>
-                                        <td className="py-2 px-4 text-center">
-                                            <button
-                                                onClick={() => {
-                                                    localStorage.setItem("edit_emp_id", row.emp_id);
-
-                                                    // Normalize to Monday
-                                                    const rawDate = new Date(row.period_start_date);
-                                                    const day = rawDate.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-                                                    const diffToMonday = (day + 6) % 7; // Converts Sunday (0) -> 6, Monday (1) -> 0, ..., Saturday (6) -> 5
-                                                    rawDate.setDate(rawDate.getDate() - diffToMonday);
-
-                                                    const mondayDate = rawDate.toISOString().slice(0, 10);
-                                                    localStorage.setItem("edit_week_start", mondayDate);
-
-                                                    navigate("/manage-timesheet");
-                                                }}
-                                                className="text-xs flex items-center gap-1 text-purple-700 hover:text-purple-900 mx-auto"
-                                            >
-                                                <FaEdit /> Edit
-                                            </button>
-
-
-                                        </td>
                                         <td className="py-2 px-4 text-purple-600 hover:underline text-sm cursor-pointer">
                                             <button onClick={() => toggleRow(idx)}>
                                                 {isExpanded ? "− Less Info" : "+ More Info"}
@@ -629,17 +705,29 @@ const TimesheetReport = () => {
 
                                     {isExpanded && (
                                         <tr className="bg-gray-100 dark:bg-gray-700 text-xs">
-                                            <td colSpan="7" className="py-3 px-4">
-                                                <div className="flex justify-between flex-wrap gap-4">
-                                                    <div>
-                                                        <div><strong>Work Area:</strong> {row.work_area || "—"}</div>
-                                                        <div><strong>Task Area:</strong> {row.task_area || "—"}</div>
-                                                        <div><strong>Ticket No.:</strong> {row.ticket_num || "—"}</div>
+                                            <td colSpan={7} className="py-3 px-4">
+                                                {/* 3-column grid: left info (fixed range), middle details (flex), right notes (fixed range) */}
+                                                <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,280px)_1fr_minmax(220px,260px)] gap-6 items-start">
+                                                    {/* Left: meta */}
+                                                    <div className="space-y-1">
+                                                        <div className="grid grid-cols-[95px_1fr] gap-x-2">
+                                                            <span className="font-semibold">Work Area:</span>
+                                                            <span className="break-words">{row.work_area || "—"}</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-[95px_1fr] gap-x-2">
+                                                            <span className="font-semibold">Task Area:</span>
+                                                            <span className="break-words">{row.task_area || "—"}</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-[95px_1fr] gap-x-2">
+                                                            <span className="font-semibold">Ticket No.:</span>
+                                                            <span className="break-words">{row.ticket_num || "—"}</span>
+                                                        </div>
                                                     </div>
 
-                                                    <div>
-                                                        <div className="font-semibold mb-1">Record Detail</div>
-                                                        <div className="grid grid-cols-8 gap-2 text-center">
+                                                    {/* Middle: weekly hours */}
+                                                    <div className="min-w-0">
+                                                        <div className="font-semibold mb-1">Activity Detail</div>
+                                                        <div className="grid grid-cols-8 gap-2 text-center font-mono tabular-nums">
                                                             <div>Mon<br />{row.monday_hours}</div>
                                                             <div>Tue<br />{row.tuesday_hours}</div>
                                                             <div>Wed<br />{row.wednesday_hours}</div>
@@ -651,16 +739,17 @@ const TimesheetReport = () => {
                                                         </div>
                                                     </div>
 
-                                                    <div className="flex flex-col justify-start mt-3">
+                                                    {/* Right: notes */}
+                                                    <div className="flex flex-col justify-start mt-1 md:mt-0 min-w-0">
                                                         <button
                                                             onClick={() => toggleNotes(idx)}
-                                                            className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 font-semibold px-3 py-1 rounded mb-2"
+                                                            className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 font-semibold px-3 py-1 rounded mb-2 self-start"
                                                         >
                                                             {showNote ? "Hide Notes" : "View Notes"}
                                                         </button>
 
                                                         {showNote && (
-                                                            <div className="text-sm italic text-gray-800 dark:text-gray-200">
+                                                            <div className="text-sm italic text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
                                                                 {row.notes || "No notes provided."}
                                                             </div>
                                                         )}
@@ -669,6 +758,7 @@ const TimesheetReport = () => {
                                             </td>
                                         </tr>
                                     )}
+
                                 </React.Fragment>
                             );
                         })}
@@ -716,4 +806,4 @@ const TimesheetReport = () => {
     );
 };
 
-export default TimesheetReport;
+export default WeeklyTimesheetReport;
