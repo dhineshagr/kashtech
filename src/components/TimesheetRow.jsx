@@ -35,6 +35,14 @@ const TimesheetRow = ({
   const isClientTimeNB = !isBillable && /client\s*time/i.test(nonBillableReason || "");
   const showProjectCompany = isBillable || isClientTimeNB;
 
+  const stateColor =
+  entry.state === "new"
+    ? "bg-green-50"
+    : entry.state === "edited"
+    ? "bg-yellow-50"
+    : "bg-white";
+
+
   return (
     <>
       {/* Timesheet Data Row */}
@@ -151,7 +159,7 @@ const TimesheetRow = ({
         </button>
       </td>
 
-      <tr className="border-b border-gray-200">
+      <tr className={`border-b ${stateColor} transition-all`}>
         <td colSpan={weekDates.length + 3} className="p-2">
           {/* existing project/company/ticket/work/task stuff */}
 

@@ -630,8 +630,8 @@ const ManageProjects = ({ companyId, companyName, onClose }) => {
                                         }
                                     }}
                                     className={`text-sm font-medium ${showNewRoleField
-                                        ? "text-red-600 hover:text-red-800"
-                                        : "text-purple-600 hover:text-purple-800"
+                                        ? "text-red-600 hover:text-white"
+                                        : "text-purple-600 hover:text-white"
                                         }`}
                                 >
                                     {showNewRoleField ? "Cancel" : "+ Create New Role"}

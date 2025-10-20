@@ -84,70 +84,83 @@ const DailyTimesheetReport = () => {
         }
     };
 
-    const buildStructuredFilters = () => {
-        return selectedClients.map(client => {
-            // find the client in your clientProjects list
-            const clientGroup = clientProjects.find(c => c.clientName === client);
-            if (!clientGroup) return { client, projects: [] };
+const buildStructuredFilters = () => {
+  return selectedClients.map((client) => {
+    const clientGroup = clientProjects.find((c) => c.clientName === client);
+    if (!clientGroup) return { client, projects: [] };
 
-            // from the selectedProjects, get the ones that belong to this client
-            const matchingProjects = selectedProjects.filter(p =>
-            clientGroup.projects.some(cp => cp.project_category === p)
-            );
+    // Trim and normalize all names before comparing
+    const matchingProjects = selectedProjects
+      .map((p) => p.trim()) // 🔥 ensure no leading/trailing space
+      .filter((proj) =>
+        clientGroup.projects.some(
+          (cp) =>
+            cp.project_category?.trim() === proj ||
+            cp.project_name?.trim() === proj
+        )
+      )
+      .map((proj) => {
+        const found = clientGroup.projects.find(
+          (cp) =>
+            cp.project_category?.trim() === proj ||
+            cp.project_name?.trim() === proj
+        );
+        return found?.project_category?.trim() || proj;
+      });
 
-            return { client, projects: matchingProjects }; // empty array = "all"
-        });
-    };
+    return { client: client.trim(), projects: matchingProjects };
+  });
+};
 
 
 
-    const buildFilterParams = () => {
-    const params = {};
+ const buildFilterParams = () => {
+  const params = {};
 
-    // Clients
-    if (selectedClients.length > 0) {
-        params.clients = selectedClients.join(",");
-    }
+  // Clients
+  if (selectedClients.length > 0) {
+    params.clients = selectedClients.join(",");
+  }
 
-    // Projects
-    if (selectedProjects.length > 0) {
-        params.projects = selectedProjects;
-    }
+  // Projects
+  if (selectedProjects.length > 0) {
+    params.projects = selectedProjects;
+  }
 
-    // Employees
-    if (selectedEmployees.length > 0) {
-        params.employees = selectedEmployees.join(",");
-    }
+  // Employees
+  if (selectedEmployees.length > 0) {
+    params.employees = selectedEmployees.join(",");
+  }
 
-    // Billable flags
-    if (isBillable && !isNonBillable) params.billable = "true";
-    else if (!isBillable && isNonBillable) params.billable = "false";
+  // Billable flags
+  if (isBillable && !isNonBillable) params.billable = "true";
+  else if (!isBillable && isNonBillable) params.billable = "false";
 
-    // Date filters
-    if (filterOption === "monthToDate") {
-        const now = new Date();
-        const start = new Date(now.getFullYear(), now.getMonth(), 1);
-        params.startDate = format(start, "yyyy-MM-dd");
-        params.endDate = format(now, "yyyy-MM-dd");
-    } else if (filterOption === "lastMonth") {
-        const now = new Date();
-        const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const end = new Date(now.getFullYear(), now.getMonth(), 0);
-        params.startDate = format(start, "yyyy-MM-dd");
-        params.endDate = format(end, "yyyy-MM-dd");
-    } else if (filterOption === "customRange" && customStartDate && customEndDate) {
-        params.startDate = format(customStartDate, "yyyy-MM-dd");
-        params.endDate = format(customEndDate, "yyyy-MM-dd");
-    }
+  // Date filters
+  if (filterOption === "monthToDate") {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    params.startDate = format(start, "yyyy-MM-dd");
+    params.endDate = format(now, "yyyy-MM-dd");
+  } else if (filterOption === "lastMonth") {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 0);
+    params.startDate = format(start, "yyyy-MM-dd");
+    params.endDate = format(end, "yyyy-MM-dd");
+  } else if (filterOption === "customRange" && customStartDate && customEndDate) {
+    params.startDate = format(customStartDate, "yyyy-MM-dd");
+    params.endDate = format(customEndDate, "yyyy-MM-dd");
+  }
 
-    const structuredFilters = buildStructuredFilters();
-        if (structuredFilters.length > 0) {
-        params.filters = JSON.stringify(structuredFilters);
-    }
+  // ✅ Correct param key for backend (expects `filters`)
+  const structuredFilters = buildStructuredFilters();
+  if (structuredFilters.length > 0) {
+    params.filters = JSON.stringify(structuredFilters);
+  }
 
-    return params;
-
-    };
+  return params;
+};
 
 
 
@@ -763,6 +776,13 @@ const DailyTimesheetReport = () => {
                             const startDate = new Date(row.period_start_date);
                             const endDate = new Date(startDate);
                             endDate.setDate(startDate.getDate() + 6);
+                            // Generate dates for Mon–Sun based on period_start_date
+                            const weekDates = Array.from({ length: 7 }, (_, i) => {
+                            const d = new Date(startDate);
+                            d.setDate(startDate.getDate() + i);
+                            return d;
+                            });
+
 
                             return (
                                 <React.Fragment key={idx}>
@@ -784,7 +804,12 @@ const DailyTimesheetReport = () => {
                                         <tr className="bg-gray-100 dark:bg-gray-700 text-xs">
                                             <td colSpan={6} className="py-3 px-4">
                                                 {/* 3-column grid: left info, middle details, right notes */}
-                                                <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,280px)_1fr_minmax(220px,260px)] gap-6 items-start">
+                                                {/* <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,280px)_1fr_minmax(220px,260px)] gap-6 items-start"> */}
+                                                <div className="grid grid-cols-1
+                                                    md:grid-cols-[minmax(220px,280px)_1fr_minmax(220px,260px)]
+                                                    lg:grid-cols-[minmax(220px,280px)_0.7fr_minmax(220px,260px)]
+                                                    gap-6 items-start
+                                                    ">
 
                                                     {/* Left: meta */}
                                                     <div className="space-y-1">
@@ -804,17 +829,49 @@ const DailyTimesheetReport = () => {
 
                                                     {/* Middle: weekly hours */}
                                                     <div className="min-w-0">
-                                                        <div className="font-semibold mb-1">Record Detail</div>
+                                                        <div className="font-semibold mb-1">Timesheet Entry Details</div>
                                                         <div className="grid grid-cols-8 gap-2 text-center font-mono tabular-nums">
-                                                            <div>Mon<br />{row.monday_hours}</div>
-                                                            <div>Tue<br />{row.tuesday_hours}</div>
-                                                            <div>Wed<br />{row.wednesday_hours}</div>
-                                                            <div>Thu<br />{row.thursday_hours}</div>
-                                                            <div>Fri<br />{row.friday_hours}</div>
-                                                            <div>Sat<br />{row.saturday_hours}</div>
-                                                            <div>Sun<br />{row.sunday_hours}</div>
-                                                            <div className="font-bold text-purple-700">Total<br />{totalHours.toFixed(2)}</div>
+                                                        <div>
+                                                            Mon<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[0], "MM/dd")}</span> <br />
+                                                            {row.monday_hours}<br />
                                                         </div>
+                                                        <div>
+                                                            Tue<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[1], "MM/dd")}</span> <br />
+                                                            {row.tuesday_hours}<br />
+                                                        </div>
+                                                        <div>
+                                                            Wed<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[2], "MM/dd")}</span> <br />
+                                                            {row.wednesday_hours}<br />
+                                                        </div>
+                                                        <div>
+                                                            Thu<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[3], "MM/dd")}</span> <br />
+                                                            {row.thursday_hours}<br />
+                                                        </div>
+                                                        <div>
+                                                            Fri<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[4], "MM/dd")}</span> <br />
+                                                            {row.friday_hours}<br />
+                                                        </div>
+                                                        <div>
+                                                            Sat<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[5], "MM/dd")}</span> <br />
+                                                            {row.saturday_hours}<br />
+                                                        </div>
+                                                        <div>
+                                                            Sun<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[6], "MM/dd")}</span> <br />
+                                                            {row.sunday_hours}<br />
+                                                        </div>
+                                                        <div className="font-bold text-purple-700">
+                                                            Total<br />
+                                                            {totalHours.toFixed(2)}
+                                                        </div>
+                                                        </div>
+
                                                     </div>
 
                                                     {/* Right: notes */}

@@ -683,6 +683,13 @@ const handleToggleBillable = (type) => {
                             const startDate = new Date(row.period_start_date);
                             const endDate = new Date(startDate);
                             endDate.setDate(startDate.getDate() + 6);
+                            // Generate dates for Mon–Sun based on period_start_date
+                            const weekDates = Array.from({ length: 7 }, (_, i) => {
+                            const d = new Date(startDate);
+                            d.setDate(startDate.getDate() + i);
+                            return d;
+                            });
+
 
                             return (
                                 <React.Fragment key={idx}>
@@ -707,7 +714,13 @@ const handleToggleBillable = (type) => {
                                         <tr className="bg-gray-100 dark:bg-gray-700 text-xs">
                                             <td colSpan={7} className="py-3 px-4">
                                                 {/* 3-column grid: left info (fixed range), middle details (flex), right notes (fixed range) */}
-                                                <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,280px)_1fr_minmax(220px,260px)] gap-6 items-start">
+                                                {/* <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,280px)_1fr_minmax(220px,260px)] gap-6 items-start"> */}
+                                                <div className="
+                                                    grid grid-cols-1
+                                                    md:grid-cols-[minmax(220px,280px)_1fr_minmax(220px,260px)]
+                                                    lg:grid-cols-[minmax(220px,280px)_0.7fr_minmax(220px,260px)]
+                                                    gap-6 items-start
+                                                    ">
                                                     {/* Left: meta */}
                                                     <div className="space-y-1">
                                                         <div className="grid grid-cols-[95px_1fr] gap-x-2">
@@ -726,16 +739,47 @@ const handleToggleBillable = (type) => {
 
                                                     {/* Middle: weekly hours */}
                                                     <div className="min-w-0">
-                                                        <div className="font-semibold mb-1">Activity Detail</div>
+                                                        <div className="font-semibold mb-1">Timesheet Entry Details</div>
                                                         <div className="grid grid-cols-8 gap-2 text-center font-mono tabular-nums">
-                                                            <div>Mon<br />{row.monday_hours}</div>
-                                                            <div>Tue<br />{row.tuesday_hours}</div>
-                                                            <div>Wed<br />{row.wednesday_hours}</div>
-                                                            <div>Thu<br />{row.thursday_hours}</div>
-                                                            <div>Fri<br />{row.friday_hours}</div>
-                                                            <div>Sat<br />{row.saturday_hours}</div>
-                                                            <div>Sun<br />{row.sunday_hours}</div>
-                                                            <div className="font-bold text-purple-700">Total<br />{totalHours.toFixed(2)}</div>
+                                                        <div>
+                                                            Mon<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[0], "MM/dd")}</span> <br />
+                                                            {row.monday_hours}<br />
+                                                        </div>
+                                                        <div>
+                                                            Tue<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[1], "MM/dd")}</span> <br />
+                                                            {row.tuesday_hours}<br />
+                                                        </div>
+                                                        <div>
+                                                            Wed<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[2], "MM/dd")}</span> <br />
+                                                            {row.wednesday_hours}<br />
+                                                        </div>
+                                                        <div>
+                                                            Thu<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[3], "MM/dd")}</span> <br />
+                                                            {row.thursday_hours}<br />
+                                                        </div>
+                                                        <div>
+                                                            Fri<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[4], "MM/dd")}</span> <br />
+                                                            {row.friday_hours}<br />
+                                                        </div>
+                                                        <div>
+                                                            Sat<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[5], "MM/dd")}</span> <br />
+                                                            {row.saturday_hours}<br />
+                                                        </div>
+                                                        <div>
+                                                            Sun<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[6], "MM/dd")}</span> <br />
+                                                            {row.sunday_hours}<br />
+                                                        </div>
+                                                        <div className="font-bold text-purple-700">
+                                                            Total<br />
+                                                            {totalHours.toFixed(2)}
+                                                        </div>
                                                         </div>
                                                     </div>
 
