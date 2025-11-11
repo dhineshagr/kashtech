@@ -100,7 +100,7 @@ const TimesheetRow = ({
           {/* Ticket, Work Area, Task Area */}
           <div className="text-xs mt-2 space-y-1">
             <div>
-              <strong>Ticket Number:</strong> {entry.ticket || "-"}
+              <strong>Work Area:</strong> {entry.workArea}
             </div>
             {entry.workArea && entry.workArea !== "-" && (
               <div>
