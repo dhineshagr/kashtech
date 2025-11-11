@@ -35,6 +35,13 @@ const ManageTimesheet = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
+  const ENTRY_STATE = {
+  SAVED: "saved",      // retrieved and untouched
+  EDITED: "edited",    // user changed something
+  NEW: "new",          // newly added row
+  };
+
+
   useEffect(() => {
     const fetchEmployees = async () => {
       try {
@@ -76,6 +83,7 @@ const ManageTimesheet = () => {
         emp_id: employee,
         weekStartDate,
         formattedDate,
+        state: ENTRY_STATE.SAVED, // mark as saved
       });
 
       // helper: normalize billable (boolean or "true"/"false" -> boolean)
@@ -187,6 +195,7 @@ const ManageTimesheet = () => {
       period_start_date: format(new Date(weekStartDate), "yyyy-MM-dd"),
       nonBillableReasonUuid: nonBillableReasonUuid || null,
       nonBillableReason: nonBillableReason || null,
+      state: ENTRY_STATE.NEW,
     };
 
    setEntries((prev) => [newEntry, ...prev]);
@@ -278,7 +287,7 @@ const ManageTimesheet = () => {
       }
 
       if (newEntries.length > 0) {
-        await fetch(API.TIMESHEET_ADD_BATCH, {
+        const res = await fetch(API.TIMESHEET_ADD_BATCH, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -286,7 +295,21 @@ const ManageTimesheet = () => {
           },
           body: JSON.stringify({ entries: newEntries }),
         });
+
+        const data = await res.json();
+        console.log("Inserted entries with IDs:", data.inserted);
+
+        if (Array.isArray(data.inserted)) {
+          // Assign returned IDs to corresponding new entries (optional, for accurate deletes)
+          setEntries(prev =>
+            prev.map((e, i) => ({
+              ...e,
+              timesheet_entry_id: e.timesheet_entry_id || data.inserted[i] || null,
+            }))
+          );
+        }
       }
+
 
       if (updateEntries.length > 0) {
         await fetch(API.UPDATE_TIMESHEET_BATCH, {
@@ -298,6 +321,15 @@ const ManageTimesheet = () => {
           body: JSON.stringify({ entries: updateEntries }),
         });
       }
+
+   
+      setEntries(prev =>
+        prev.map(e => ({
+          ...e,
+          state: ENTRY_STATE.SAVED,
+        }))
+      );
+
 
       setShowSuccess(true);
       setTimeout(() => {
@@ -312,54 +344,57 @@ const ManageTimesheet = () => {
     }
   };
 
-  const handleRemoveEntry = async (rowIdx) => {
-    const removed = entries[rowIdx];
-    console.log("🧹 Trying to remove:", removed);
+const handleRemoveEntry = async (rowIdx) => {
+  const removed = entries[rowIdx];
+  console.log("🧹 Trying to remove:", removed);
 
-    // Make sure we have the entryId first
-    if (!removed?.timesheet_entry_id) {
-      console.log("⛔ Skipped delete: Missing timesheet_entry_id.");
-      return;
-    }
+  // Remove from UI immediately
+  setEntries((prev) => prev.filter((_, i) => i !== rowIdx));
 
+  // If entry already exists in DB, delete immediately
+  if (removed?.timesheet_entry_id) {
     try {
       const res = await fetch(
         API.DELETE_TIMESHEET_ENTRY_BY_ID(removed.timesheet_entry_id),
         { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
       );
-
-      if (!res.ok) {
-        const msg = await res.json().catch(() => ({}));
-        console.error("❌ Failed to delete:", msg);
-        return;
-      }
-
-      console.log(`🗑️ Deleted entryId=${removed.timesheet_entry_id}`);
-
-      // Update state only if delete succeeds
-      setEntries((prev) => prev.filter((_, i) => i !== rowIdx));
-
-      // Track deleted entries locally if needed
-      deletedEntriesRef.current.push({
-        timesheet_entry_id: removed.timesheet_entry_id,
-      });
-      console.log("🚨 Deleting from ManageTimesheet:", deletedEntriesRef.current);
+      if (!res.ok) console.error("❌ Failed to delete:", await res.text());
+      else console.log(`🗑️ Deleted entryId=${removed.timesheet_entry_id}`);
     } catch (err) {
       console.error("❌ Delete request failed:", err);
     }
-  };
+  } else {
+    // If it's a new entry that hasn't been saved yet, just remove it locally.
+    console.log("🧹 Removing unsaved entry only from UI.");
+  }
+};
 
-  const handleHourChange = (rowIdx, dayIdx, value) => {
-    const updated = [...entries];
+
+
+const handleHourChange = (rowIdx, dayIdx, value) => {
+  setEntries(prev => {
+    const updated = [...prev];
     updated[rowIdx].hours[dayIdx] = parseFloat(value) || 0;
-    setEntries(updated);
-  };
 
-  const handleNoteChange = (rowIdx, value) => {
-    const updated = [...entries];
+    // if it was saved before, mark as edited
+    if (updated[rowIdx].state === ENTRY_STATE.SAVED) {
+      updated[rowIdx].state = ENTRY_STATE.EDITED;
+    }
+    return updated;
+  });
+};
+
+const handleNoteChange = (rowIdx, value) => {
+  setEntries(prev => {
+    const updated = [...prev];
     updated[rowIdx].notes = value;
-    setEntries(updated);
-  };
+    if (updated[rowIdx].state === ENTRY_STATE.SAVED) {
+      updated[rowIdx].state = ENTRY_STATE.EDITED;
+    }
+    return updated;
+  });
+};
+
 
   return (
     <div className="min-h-screen p-6 text-gray-800 dark:text-white">

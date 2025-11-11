@@ -121,7 +121,7 @@ const ManageEmployees = () => {
                                         <td className="p-3 text-center">
                                             <button
                                                 onClick={() => setEditingEmployee(emp)}
-                                                className="text-xs flex items-center gap-1 text-purple-700 hover:text-purple-900"
+                                                className="text-xs flex items-center gap-1 text-purple-700 hover:text-white"
                                             >
                                                 <FaEdit /> Edit
                                             </button>
@@ -129,7 +129,7 @@ const ManageEmployees = () => {
                                         <td className="p-3 text-center">
                                             <button
                                                 onClick={() => setExpandedEmployee(isExpanded ? null : emp)}
-                                                className="text-xs text-purple-700 hover:underline flex items-center gap-1"
+                                                className="text-xs text-purple-700 hover:text-white flex items-center gap-1"
                                             >
                                                 <span className="text-lg">{isExpanded ? "−" : "+"}</span> {isExpanded ? "Less Info" : "More Info"}
                                             </button>

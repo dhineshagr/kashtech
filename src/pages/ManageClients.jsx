@@ -184,13 +184,13 @@ const ManageClients = () => {
                                         <td className="p-3 text-center flex flex-col items-center gap-2">
                                             <button
                                                 onClick={() => setEditingClient(client)}
-                                                className="text-xs flex items-center gap-1 text-purple-700 hover:text-purple-900"
+                                                className="text-xs flex items-center gap-1 text-purple-700 hover:text-white"
                                             >
                                                 <FaEdit /> Edit
                                             </button>
                                             <button
                                                 onClick={() => openGenerateModal(client, "SOW")}
-                                                className="text-xs flex items-center gap-1 text-green-600 hover:text-green-800"
+                                                className="text-xs flex items-center gap-1 text-green-600 hover:text-green-300"
                                                 disabled={loadingCompanyId === client.company_id}
                                             >
                                                 {loadingCompanyId === client.company_id ? (
@@ -201,7 +201,7 @@ const ManageClients = () => {
                                             </button>
                                             <button
                                                 onClick={() => openGenerateModal(client, "MSA")}
-                                                className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-800"
+                                                className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-200"
                                             >
                                                 <FaFileContract /> Generate MSA
                                             </button>
@@ -209,7 +209,7 @@ const ManageClients = () => {
                                         <td className="p-3 text-center">
                                             <button
                                                 onClick={() => setExpandedClient(isExpanded ? null : client)}
-                                                className="text-xs text-purple-700 hover:underline flex items-center gap-1"
+                                                className="text-xs text-purple-700 hover:text-white flex items-center gap-1"
                                             >
                                                 {isExpanded ? "− Less Info" : "+ More Info"}
                                             </button>

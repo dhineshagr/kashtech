@@ -35,76 +35,86 @@ const TimesheetRow = ({
   const isClientTimeNB = !isBillable && /client\s*time/i.test(nonBillableReason || "");
   const showProjectCompany = isBillable || isClientTimeNB;
 
+  const stateColor =
+  entry.state === "new"
+    ? "bg-green-50"
+    : entry.state === "edited"
+    ? "bg-yellow-50"
+    : "bg-white";
+
+
   return (
     <>
       {/* Timesheet Data Row */}
 
-      <td className={
-        "p-3 align-top text-sm text-left w-[230px] border-l-8 " +
-        (entry.billable === true ||
-          String(entry.billable).toLowerCase() === "true"
-          ? "border-green-500"
-          : "border-gray-400")
-      }>
-      
-        {/* Project / Company (only show if Billable or NB Client Time) */}
-        {(entry.billable === true ||
-          String(entry.billable).toLowerCase() === "true" ||
-          /client\s*time/i.test(entry.nonBillableReason || "")) && (
-            <>
-              <div className="font-semibold text-purple-900">
-                {entry.projectName || "Project Name"}
-              </div>
-              <div className="text-gray-700">
-                {entry.companyName || "Company Name"}
-              </div>
-            </>
+        <td
+          className={
+            "p-3 align-top text-sm text-left w-[230px] " +
+            (entry.billable === true ||
+            String(entry.billable).toLowerCase() === "true"
+              ? "" // No border for billable
+              : "border-l-8 border-purple-800") // Purple border for non-billable
+          }
+        >
+          {/* Project / Company (only show if Billable or NB Client Time) */}
+          {(entry.billable === true ||
+            String(entry.billable).toLowerCase() === "true" ||
+            /client\s*time/i.test(entry.nonBillableReason || "")) && (
+              <>
+                <div className="font-semibold text-purple-900">
+                  {entry.projectName || "Project Name"}
+                </div>
+                <div className="text-gray-700">
+                  {entry.companyName || "Company Name"}
+                </div>
+              </>
+            )}
+
+          {/* Billable / Non-Billable text */}
+          <div className="mb-1 pt-1 pb-1">
+            <span
+              className={
+                "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium " +
+                (entry.billable === true ||
+                String(entry.billable).toLowerCase() === "true"
+                  ? "text-gray-700" // plain gray text for billable
+                  : "bg-green-100 text-green-700") // highlighted purple for non-billable
+              }
+            >
+              {entry.billable === true ||
+              String(entry.billable).toLowerCase() === "true"
+                ? "Billable"
+                : "Non-Billable"}
+            </span>
+          </div>
+
+          {/* Non-Billable Reason (always show when NB) */}
+          {!(entry.billable === true ||
+            String(entry.billable).toLowerCase() === "true") && (
+            <div className="text-purple-700">
+              <span className="font-semibold">Reason:</span>{" "}
+              {entry.nonBillableReason || "Non-Billable"}
+            </div>
           )}
 
-        {/* Billable / Non-Billable pill */}
-        <div className="mb-1 pt-1 pb-1">
-          <span
-            className={
-              "inline-flex items-center rounded-50 px-2 py-0.5 text-xs font-medium " +
-              (entry.billable === true || String(entry.billable).toLowerCase() === "true"
-                ? "bg-green-100 text-green-800"
-                : "bg-gray-200 text-gray-800")
-            }
-          >
-            {entry.billable === true || String(entry.billable).toLowerCase() === "true"
-              ? "Billable"
-              : "Non-Billable"}
-          </span>
-        </div>
-
-
-
-        {/* Non-Billable Reason (always show when NB) */}
-        {!(entry.billable === true || String(entry.billable).toLowerCase() === "true") && (
-          <div className="text-gray-700">
-            <span className="font-semibold">Reason:</span>{" "}
-            {entry.nonBillableReason || "Non-Billable"}
-          </div>
-        )}
-
-        <div className="text-xs mt-2 space-y-1">
-          <div>
-            <strong>Ticket Number:</strong> {entry.ticket || "-"}
-          </div>
-          {(entry.workArea && entry.workArea !== "-") && (
+          {/* Ticket, Work Area, Task Area */}
+          <div className="text-xs mt-2 space-y-1">
             <div>
               <strong>Work Area:</strong> {entry.workArea}
             </div>
-          )}
-          {(entry.taskArea && entry.taskArea !== "-") && (
-            <div>
-              <strong>Task Area:</strong> {entry.taskArea}
-            </div>
-          )}
-        </div>
-        
+            {entry.workArea && entry.workArea !== "-" && (
+              <div>
+                <strong>Work Area:</strong> {entry.workArea}
+              </div>
+            )}
+            {entry.taskArea && entry.taskArea !== "-" && (
+              <div>
+                <strong>Task Area:</strong> {entry.taskArea}
+              </div>
+            )}
+          </div>
+        </td>
 
-      </td>
 
       {/* Hours Input for Each Day */}
       {entry.hours.map((hour, dayIdx) => (
@@ -149,7 +159,7 @@ const TimesheetRow = ({
         </button>
       </td>
 
-      <tr className="border-b border-gray-200">
+      <tr className={`border-b ${stateColor} transition-all`}>
         <td colSpan={weekDates.length + 3} className="p-2">
           {/* existing project/company/ticket/work/task stuff */}
 

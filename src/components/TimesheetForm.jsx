@@ -78,25 +78,31 @@ const TimesheetForm = ({
 
   // 🔁 Fetch projects when company changes
   useEffect(() => {
-    if (!company) return;
+  if (!company) {
+    // 🚫 Clear projects when no company is selected
+    setProjectOptions([]);
+    setProject("");
+    return;
+  }
 
-    const fetchProjects = async () => {
-      try {
-        const res = await axios.get(API.GET_PROJECTS_BY_COMPANY(company), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setProjectOptions(res.data);
-        setProject("");
-        setWorkArea("");
-        setTaskArea("");
-        setAreaOptions({ work: [], task: [] });
-      } catch (err) {
-        console.error("❌ Failed to fetch projects:", err);
-      }
-    };
+  const fetchProjects = async () => {
+    try {
+      const res = await axios.get(API.GET_PROJECTS_BY_COMPANY(company), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setProjectOptions(res.data);
+      setProject("");
+      setWorkArea("");
+      setTaskArea("");
+      setAreaOptions({ work: [], task: [] });
+    } catch (err) {
+      console.error("❌ Failed to fetch projects:", err);
+    }
+  };
 
-    fetchProjects();
-  }, [company]);
+  fetchProjects();
+}, [company]);
+
 
   // 🔁 Fetch work areas when project changes
   useEffect(() => {
@@ -208,7 +214,7 @@ const TimesheetForm = ({
         <div className="flex items-center bg-gray-100 rounded-full p-1">
           <button
             className={`px-4 py-1 rounded-full text-sm ${
-              isBillable ? "bg-purple-700 text-white" : "text-gray-600"
+              isBillable ? "bg-purple-700 text-white" : "text-gray-600 hover:text-white"
             }`}
             onClick={() => setIsBillable(true)}
           >
@@ -216,7 +222,7 @@ const TimesheetForm = ({
           </button>
           <button
             className={`px-4 py-1 rounded-full text-sm ${
-              !isBillable ? "bg-purple-700 text-white" : "text-gray-600"
+              !isBillable ? "bg-purple-700 text-white" : "text-gray-600 hover:text-white" 
             }`}
             onClick={() => setIsBillable(false)}
           >
@@ -266,11 +272,12 @@ const TimesheetForm = ({
        {selectedWeek && (isBillable || nbIsClientTime) && (
           <div className="flex flex-col text-sm">
             <label className="mb-1 font-medium">*Project</label>
-            <select
-              value={project}
-              onChange={(e) => setProject(e.target.value)}
-              className="border rounded px-3 py-2 min-w-[180px]"
-            >
+              <select
+                value={project}
+                onChange={(e) => setProject(e.target.value)}
+                disabled={!company} // 🔒 disable when no company
+                className="border rounded pl-2 pr-8 py-2 disabled:bg-gray-100"
+              >
               <option value="">Select Project</option>
               {projectOptions.map((p) => (
                 <option key={p.sow_id} value={p.sow_id}>
@@ -299,7 +306,7 @@ const TimesheetForm = ({
           <div className="flex items-end">
             <button
               onClick={handleClick}
-              className="border border-purple-600 text-purple-700 px-4 py-2 rounded hover:bg-purple-50 text-sm"
+              className="border border-purple-600 text-purple-700 px-4 py-2 rounded hover:bg-purple-100 text-sm"
             >
               + Add to Sheet
             </button>
@@ -356,7 +363,7 @@ const TimesheetForm = ({
             <button
               type="button"
               onClick={handleClick}
-              className="border border-purple-600 text-purple-700 px-4 py-2 rounded hover:bg-purple-50 text-sm"
+              className="border border-purple-600 text-purple-700 px-4 py-2 rounded hover:bg-purple-100 text-sm"
             >
               + Add to Sheet
             </button>

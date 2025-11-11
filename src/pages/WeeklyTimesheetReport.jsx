@@ -30,6 +30,7 @@ const WeeklyTimesheetReport = () => {
     const [clientList, setClientList] = useState([]);
     const [projectList, setProjectList] = useState([]);
     const [employeeList, setEmployeeList] = useState([]);
+    const [clientProjects, setClientProjects] = useState([]);
     const [selectedCompanyId, setSelectedCompanyId] = useState(null);
 
     const [currentPage, setCurrentPage] = useState(1);
@@ -66,10 +67,44 @@ const WeeklyTimesheetReport = () => {
         }
     };
 
+   const buildFilterParams = () => {
+  const params = {};
 
-    useEffect(() => { // Use effect isn't used to fetch data in a well built react system
-        fetchReport();
-    }, [filterOption, customStartDate, customEndDate]);
+  // Build structured filters (client–project mapping)
+  const structuredFilters = selectedClients.map((client) => {
+    const group = clientProjects.find((g) => g.clientName === client);
+    const relatedProjects = selectedProjects.filter((proj) =>
+      group?.projects?.some((p) => p.project_category === proj)
+    );
+    return { client, projects: relatedProjects };
+  });
+
+  if (structuredFilters.length > 0) {
+    params.filters = JSON.stringify(structuredFilters);
+  }
+
+  // Employees
+  if (selectedEmployees.length > 0) {
+    params.employees = selectedEmployees.join(",");
+  }
+
+  // Billable logic (covers all 3 states)
+  if (isBillable && !isNonBillable) params.billable = "true";
+  else if (!isBillable && isNonBillable) params.billable = "false";
+  else if (isBillable && isNonBillable) delete params.billable; // show all
+
+  // Weekly date params
+  Object.assign(params, buildWeekDateParams());
+
+  return params;
+};
+
+
+
+    useEffect(() => {
+        fetchReport(buildFilterParams());
+    }, [filterOption, customStartDate, customEndDate, selectedClients, selectedProjects, selectedEmployees, isBillable, isNonBillable]);
+
 
     useEffect(() => {
         fetchClientList();
@@ -83,31 +118,40 @@ const WeeklyTimesheetReport = () => {
         setIsBillable(true);
         setIsNonBillable(false);
 
-        fetchReport(); // ✅ fetch base data again with default params
+        fetchReport(buildFilterParams()); // ✅ refetch with base/default params
     };
+
 
 
     const applyFilters = () => {
-        const params = {};
-
-        if (selectedClients.length > 0) params.clients = selectedClients.join(",");
-        if (selectedProjects.length > 0) params.projects = selectedProjects.join(",");
-        if (selectedEmployees.length > 0) params.employees = selectedEmployees.join(",");
-
-        if (isBillable && !isNonBillable) params.billable = "true";
-        else if (!isBillable && isNonBillable) params.billable = "false";
-
-        // Weekly date params
-        Object.assign(params, buildWeekDateParams());
-
-        fetchReport(params);
+        fetchReport(buildFilterParams());
         setShowFilters(false);
     };
+
 
     const weekBounds = (date) => ({
         start: startOfWeek(date, { weekStartsOn: 1 }), // Monday
         end: endOfWeek(date, { weekStartsOn: 1 }),     // Sunday
     });
+
+const removeClient = (clientToRemove) => {
+  setSelectedClients((prev) => prev.filter((c) => c !== clientToRemove));
+  setClientProjects((prev) => prev.filter((c) => c.clientName !== clientToRemove));
+
+  setSelectedProjects((prev) =>
+    prev.filter((proj) => {
+      const group = clientProjects.find((g) =>
+        g.projects.some((p) => p.project_category === proj)
+      );
+      return !group || group.clientName !== clientToRemove;
+    })
+  );
+
+  // 🔁 Optionally, refetch report after client removal
+  fetchReport(buildFilterParams());
+};
+
+
 
     const buildWeekDateParams = () => {
         const now = new Date();
@@ -259,58 +303,89 @@ const WeeklyTimesheetReport = () => {
         }
     };
 
-    useEffect(() => {
-        const fetchInitialLists = async () => {
-            try {
-                const billableFlag = isBillable && !isNonBillable ? true :
-                    !isBillable && isNonBillable ? false : null;
 
-                // Fetch clients by billable status
-                if (billableFlag !== null) {
-                    const clientsRes = await axios.get(
-                        API.GET_CLIENTS_BY_BILLABLE(billableFlag),
-                        {
-                            headers: { Authorization: `Bearer ${token}` },
-                        }
-                    );
-                    const sortedClients = [...clientsRes.data].sort((a, b) =>
-                        a.company_name.localeCompare(b.company_name)
-                    );
-                    setClientList(sortedClients);
-                } else {
-                    setClientList([]);
-                }
+useEffect(() => {
+  const fetchInitialLists = async () => {
+    try {
+      let clients = [];
 
-                // Fetch employees
-                const empRes = await axios.get(API.GET_ALL_EMPLOYEES, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                const fullName = (person) => {
-                    if (!person || typeof person !== "object") return "";
-                    const first = person?.first_name ?? "";
-                    const last = person?.last_name ?? "";
-                    return `${first} ${last}`.trim();
-                };
+      // 🔁 Fetch based on billable/non-billable toggles
+      if (isBillable && isNonBillable) {
+        const [billableRes, nonBillableRes] = await Promise.all([
+          axios.get(API.GET_CLIENTS_BY_BILLABLE(true), {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          axios.get(API.GET_CLIENTS_BY_BILLABLE(false), {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+        clients = [...billableRes.data, ...nonBillableRes.data];
+      } else if (isBillable && !isNonBillable) {
+        const res = await axios.get(API.GET_CLIENTS_BY_BILLABLE(true), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        clients = res.data;
+      } else if (!isBillable && isNonBillable) {
+        const res = await axios.get(API.GET_CLIENTS_BY_BILLABLE(false), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        clients = res.data;
+      }
 
-                const filteredEmps = Array.isArray(empRes.data)
-                    ? empRes.data.filter(e => e?.first_name || e?.last_name)
-                    : [];
+      // ✅ Deduplicate and sort client list
+      const sortedClients = clients
+        .filter(
+          (v, i, a) => a.findIndex((t) => t.company_id === v.company_id) === i
+        )
+        .sort((a, b) => a.company_name.localeCompare(b.company_name));
 
-                const sortedEmps = filteredEmps.sort((a, b) =>
-                    fullName(a).localeCompare(fullName(b))
-                );
+      setClientList(sortedClients);
 
-                setEmployeeList(sortedEmps);
+      // ✅ KEEP existing selections intact — do not clear them
+      // (Removed the block that was filtering selectedClients / selectedProjects)
+
+      // 🔁 Fetch employees (keep this part)
+      const empRes = await axios.get(API.GET_ALL_EMPLOYEES, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const fullName = (person) => {
+        if (!person || typeof person !== "object") return "";
+        const first = person?.first_name ?? "";
+        const last = person?.last_name ?? "";
+        return `${first} ${last}`.trim();
+      };
+
+      const filteredEmps = Array.isArray(empRes.data)
+        ? empRes.data.filter((e) => e?.first_name || e?.last_name)
+        : [];
+
+      const sortedEmps = filteredEmps.sort((a, b) =>
+        fullName(a).localeCompare(fullName(b))
+      );
+
+      setEmployeeList(sortedEmps);
+    } catch (error) {
+      console.error("❌ Error fetching lists:", error);
+    }
+  };
+
+  fetchInitialLists();
+
+  // ✅ Instantly refetch report whenever billable toggles change
+  fetchReport(buildFilterParams());
+}, [isBillable, isNonBillable]);
 
 
-                setEmployeeList(sortedEmps);
-            } catch (error) {
-                console.error("❌ Error fetching lists:", error);
-            }
-        };
+const handleToggleBillable = (type) => {
+  if (type === "billable") setIsBillable((prev) => !prev);
+  if (type === "nonBillable") setIsNonBillable((prev) => !prev);
+  // Auto-refresh report immediately
+  fetchReport(buildFilterParams());
+};
 
-        fetchInitialLists();
-    }, [isBillable, isNonBillable]);
+
+    
 
     return (
         <div className="min-h-screen text-gray-800 dark:text-white px-6 py-6">
@@ -381,12 +456,26 @@ const WeeklyTimesheetReport = () => {
                                     {/* Billable Type */}
                                     <div>
                                         <p className="font-bold text-sm text-purple-900 dark:text-white">Type</p>
-                                        <label className="block text-sm">
-                                            <input type="checkbox" className="mr-2" checked={isBillable} onChange={() => setIsBillable(!isBillable)} /> Billable
-                                        </label>
-                                        <label className="block text-sm">
-                                            <input type="checkbox" className="mr-2" checked={isNonBillable} onChange={() => setIsNonBillable(!isNonBillable)} /> Non-Billable
-                                        </label>
+<label className="block text-sm">
+  <input
+    type="checkbox"
+    className="mr-2"
+    checked={isBillable}
+    onChange={() => handleToggleBillable("billable")}
+  />
+  Billable
+</label>
+
+<label className="block text-sm">
+  <input
+    type="checkbox"
+    className="mr-2"
+    checked={isNonBillable}
+    onChange={() => handleToggleBillable("nonBillable")}
+  />
+  Non-Billable
+</label>
+
                                     </div>
 
                                     {/* Clients and Projects */}
@@ -394,82 +483,87 @@ const WeeklyTimesheetReport = () => {
                                         <p className="font-bold text-sm text-purple-900 dark:text-white">Client and Project</p>
 
                                         {/* Update in Client dropdown onChange */}
-                                        <select
-                                            className="w-full border px-2 py-1 text-sm rounded"
-                                            onChange={async (e) => {
-                                                const selectedClient = e.target.value;
+                                     <select
+                                        className="w-full border px-2 py-1 text-sm rounded"
+                                        onChange={async (e) => {
+                                            const selectedClient = e.target.value;
+                                            if (!selectedClient || selectedClients.includes(selectedClient)) return;
 
-                                                if (selectedClient && !selectedClients.includes(selectedClient)) {
-                                                    setSelectedClients([selectedClient]);  // ✅ Safely update
-                                                    setSelectedProjects([]);               // 🔄 Reset
-                                                    setProjectList([]);                    // 🔄 Clear
-                                                }
+                                            setSelectedClients((prev) => [...prev, selectedClient]);
 
-                                                const selectedObj = clientList.find(c => c.company_name === selectedClient);
-                                                if (selectedObj?.company_id) {
-                                                    try {
-                                                        const projRes = await axios.get(
-                                                            API.GET_PROJECTS_BY_COMPANY(selectedObj.company_id),
-                                                            {
-                                                                headers: { Authorization: `Bearer ${token}` },
-                                                            }
-                                                        );
-                                                        const sortedProjects = [...projRes.data].sort((a, b) =>
-                                                            a.project_category.localeCompare(b.project_category)
-                                                        );
-                                                        setProjectList(sortedProjects);
-                                                    } catch (err) {
-                                                        console.error("❌ Error fetching projects", err);
-                                                    }
-                                                }
-                                            }}
+                                            const selectedObj = clientList.find(c => c.company_name === selectedClient);
+                                            if (!selectedObj?.company_id) return;
 
+                                            try {
+                                            const projRes = await axios.get(
+                                                API.GET_PROJECTS_BY_COMPANY(selectedObj.company_id),
+                                                { headers: { Authorization: `Bearer ${token}` } }
+                                            );
+
+                                            const sortedProjects = projRes.data.sort((a, b) =>
+                                                a.project_category.localeCompare(b.project_category)
+                                            );
+
+                                            setClientProjects((prev) => {
+                                                const filtered = prev.filter(p => p.clientName !== selectedClient);
+                                                return [...filtered, { clientName: selectedClient, projects: sortedProjects }];
+                                            });
+                                            } catch (err) {
+                                            console.error("❌ Error fetching projects", err);
+                                            }
+                                        }}
                                         >
-                                            <option value="">Select Client</option>
-                                            {clientList.map((client) => (
-                                                <option key={client.company_id} value={client.company_name}>
-                                                    {client.company_name}
-                                                </option>
-                                            ))}
+                                        <option value="">Select Client</option>
+                                        {clientList.map((client) => (
+                                            <option key={client.company_id} value={client.company_name}>
+                                            {client.company_name}
+                                            </option>
+                                        ))}
                                         </select>
+
 
                                         <div className="mt-2 flex flex-wrap gap-1">
                                             {selectedClients.map((client, idx) => (
                                                 <span key={idx} className="bg-purple-100 text-purple-800 px-2 py-1 text-xs rounded-full">
                                                     {client}{" "}
-                                                    <button onClick={() => setSelectedClients(selectedClients.filter((c) => c !== client))}>✕</button>
+                                                    <button onClick={() => removeClient(client)}>✕</button>
                                                 </span>
                                             ))}
                                         </div>
 
-                                        {selectedClients.length > 0 && projectList.length > 0 && (
-                                            <select
-                                                className="w-full mt-2 border px-2 py-1 text-sm rounded"
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    if (val && !selectedProjects.includes(val)) {
-                                                        setSelectedProjects([...selectedProjects, val]);
-                                                    }
-                                                    e.target.selectedIndex = 0;
-                                                }}
-                                            >
-                                                <option value="">Select Project</option>
-                                                {projectList.map((proj) => (
-                                                    <option key={proj.sow_id} value={proj.project_category}>
-                                                        {proj.project_category}
-                                                    </option>
+                                    {selectedClients.length > 0 && clientProjects.length > 0 && (
+                                        <select
+                                            className="w-full mt-2 border px-2 py-1 text-sm rounded"
+                                            onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val && !selectedProjects.includes(val)) {
+                                                setSelectedProjects([...selectedProjects, val]);
+                                            }
+                                            e.target.selectedIndex = 0;
+                                            }}
+                                        >
+                                            <option value="">Select Project</option>
+                                            {clientProjects.map((group, idx) => (
+                                            <optgroup key={idx} label={group.clientName}>
+                                                {group.projects.map((proj) => (
+                                                <option key={proj.sow_id} value={proj.project_category}>
+                                                    {proj.project_category}
+                                                </option>
                                                 ))}
-                                            </select>
-                                        )}
+                                            </optgroup>
+                                            ))}
+                                        </select>
+                                    )}
+
 
                                         <div className="mt-2 flex flex-wrap gap-1">
-                                            {selectedProjects.map((proj, idx) => (
-                                                <span key={idx} className="bg-purple-100 text-purple-800 px-2 py-1 text-xs rounded-full">
-                                                    {proj}{" "}
-                                                    <button onClick={() => setSelectedProjects(selectedProjects.filter((p) => p !== proj))}>✕</button>
-                                                </span>
-                                            ))}
+                                        {selectedProjects.map((proj, idx) => (
+                                            <span key={idx} className="bg-purple-100 text-purple-800 px-2 py-1 text-xs rounded-full">
+                                            {proj} <button onClick={() => setSelectedProjects(selectedProjects.filter((p) => p !== proj))}>✕</button>
+                                            </span>
+                                        ))}
                                         </div>
+
                                     </div>
 
                                     {/* Employees */}
@@ -570,7 +664,6 @@ const WeeklyTimesheetReport = () => {
                             <th className="py-3 px-4 font-semibold cursor-pointer" onClick={() => handleSort("project_category")}>
                                 Project Name
                             </th>
-                            <th className="py-3 px-4 font-semibold text-center">Actions</th>
                             <th className="py-3 px-4 font-semibold">Details</th>
                         </tr>
                     </thead>
@@ -590,6 +683,13 @@ const WeeklyTimesheetReport = () => {
                             const startDate = new Date(row.period_start_date);
                             const endDate = new Date(startDate);
                             endDate.setDate(startDate.getDate() + 6);
+                            // Generate dates for Mon–Sun based on period_start_date
+                            const weekDates = Array.from({ length: 7 }, (_, i) => {
+                            const d = new Date(startDate);
+                            d.setDate(startDate.getDate() + i);
+                            return d;
+                            });
+
 
                             return (
                                 <React.Fragment key={idx}>
@@ -598,32 +698,11 @@ const WeeklyTimesheetReport = () => {
                                             {format(startDate, "MMM d")} - {format(endDate, "MMM d")}
                                         </td>
                                         <td className="py-2 px-4">{row.employee_name}</td>
-                                        <td className="py-2 px-4">{row.billable ? "Billable" : "Non-Billable"}</td>
+                                        <td className="py-2 px-4">
+                                        {String(row.billable).toLowerCase() === "true" ? "Billable" : "Non-Billable"}
+                                        </td>
                                         <td className="py-2 px-4">{row.company_name}</td>
                                         <td className="py-2 px-4">{row.project_category}</td>
-                                        <td className="py-2 px-4 text-center">
-                                            <button
-                                                onClick={() => {
-                                                    localStorage.setItem("edit_emp_id", row.emp_id);
-
-                                                    // Normalize to Monday
-                                                    const rawDate = new Date(row.period_start_date);
-                                                    const day = rawDate.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-                                                    const diffToMonday = (day + 6) % 7; // Converts Sunday (0) -> 6, Monday (1) -> 0, ..., Saturday (6) -> 5
-                                                    rawDate.setDate(rawDate.getDate() - diffToMonday);
-
-                                                    const mondayDate = rawDate.toISOString().slice(0, 10);
-                                                    localStorage.setItem("edit_week_start", mondayDate);
-
-                                                    navigate("/manage-timesheet");
-                                                }}
-                                                className="text-xs flex items-center gap-1 text-purple-700 hover:text-purple-900 mx-auto"
-                                            >
-                                                <FaEdit /> Edit
-                                            </button>
-
-
-                                        </td>
                                         <td className="py-2 px-4 text-purple-600 hover:underline text-sm cursor-pointer">
                                             <button onClick={() => toggleRow(idx)}>
                                                 {isExpanded ? "− Less Info" : "+ More Info"}
@@ -635,7 +714,13 @@ const WeeklyTimesheetReport = () => {
                                         <tr className="bg-gray-100 dark:bg-gray-700 text-xs">
                                             <td colSpan={7} className="py-3 px-4">
                                                 {/* 3-column grid: left info (fixed range), middle details (flex), right notes (fixed range) */}
-                                                <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,280px)_1fr_minmax(220px,260px)] gap-6 items-start">
+                                                {/* <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,280px)_1fr_minmax(220px,260px)] gap-6 items-start"> */}
+                                                <div className="
+                                                    grid grid-cols-1
+                                                    md:grid-cols-[minmax(220px,280px)_1fr_minmax(220px,260px)]
+                                                    lg:grid-cols-[minmax(220px,280px)_0.7fr_minmax(220px,260px)]
+                                                    gap-6 items-start
+                                                    ">
                                                     {/* Left: meta */}
                                                     <div className="space-y-1">
                                                         <div className="grid grid-cols-[95px_1fr] gap-x-2">
@@ -654,16 +739,47 @@ const WeeklyTimesheetReport = () => {
 
                                                     {/* Middle: weekly hours */}
                                                     <div className="min-w-0">
-                                                        <div className="font-semibold mb-1">Activity Detail</div>
+                                                        <div className="font-semibold mb-1">Timesheet Entry Details</div>
                                                         <div className="grid grid-cols-8 gap-2 text-center font-mono tabular-nums">
-                                                            <div>Mon<br />{row.monday_hours}</div>
-                                                            <div>Tue<br />{row.tuesday_hours}</div>
-                                                            <div>Wed<br />{row.wednesday_hours}</div>
-                                                            <div>Thu<br />{row.thursday_hours}</div>
-                                                            <div>Fri<br />{row.friday_hours}</div>
-                                                            <div>Sat<br />{row.saturday_hours}</div>
-                                                            <div>Sun<br />{row.sunday_hours}</div>
-                                                            <div className="font-bold text-purple-700">Total<br />{totalHours.toFixed(2)}</div>
+                                                        <div>
+                                                            Mon<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[0], "MM/dd")}</span> <br />
+                                                            {row.monday_hours}<br />
+                                                        </div>
+                                                        <div>
+                                                            Tue<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[1], "MM/dd")}</span> <br />
+                                                            {row.tuesday_hours}<br />
+                                                        </div>
+                                                        <div>
+                                                            Wed<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[2], "MM/dd")}</span> <br />
+                                                            {row.wednesday_hours}<br />
+                                                        </div>
+                                                        <div>
+                                                            Thu<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[3], "MM/dd")}</span> <br />
+                                                            {row.thursday_hours}<br />
+                                                        </div>
+                                                        <div>
+                                                            Fri<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[4], "MM/dd")}</span> <br />
+                                                            {row.friday_hours}<br />
+                                                        </div>
+                                                        <div>
+                                                            Sat<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[5], "MM/dd")}</span> <br />
+                                                            {row.saturday_hours}<br />
+                                                        </div>
+                                                        <div>
+                                                            Sun<br />
+                                                            <span className="text-xs text-gray-500">{format(weekDates[6], "MM/dd")}</span> <br />
+                                                            {row.sunday_hours}<br />
+                                                        </div>
+                                                        <div className="font-bold text-purple-700">
+                                                            Total<br />
+                                                            {totalHours.toFixed(2)}
+                                                        </div>
                                                         </div>
                                                     </div>
 

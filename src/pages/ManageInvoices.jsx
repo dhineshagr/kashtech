@@ -195,7 +195,7 @@ const ManageInvoices = () => {
                                     <td className={`p-3 font-semibold ${status.color}`}>• {status.text}</td>
                                     <td className="p-3 text-center flex gap-2 justify-center">
                                         <button
-                                            className="text-xs text-purple-700 hover:text-purple-900 flex items-center gap-1"
+                                            className="text-xs text-purple-700 hover:text-white flex items-center gap-1"
                                             onClick={() => {
                                                 setSelectedInvoice(inv);
                                                 setTimeout(() => setShowEditModal(true), 0);
@@ -205,7 +205,7 @@ const ManageInvoices = () => {
                                         </button>
 
                                         <button
-                                            className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1"
+                                            className="text-xs text-red-600 hover:text-white flex items-center gap-1"
                                             onClick={() => handleDelete(inv.invoice_id)}
                                         >
                                             <FaTrash /> Delete
