@@ -688,7 +688,7 @@ const handleToggleBillable = (type) => {
                                 (parseFloat(row.saturday_hours) || 0) +
                                 (parseFloat(row.sunday_hours) || 0);
 
-                            onst startDate = parseLocalDate(row.period_start_date);
+                            const startDate = parseLocalDate(row.period_start_date);
                             const endDate = new Date(startDate);
                             endDate.setDate(startDate.getDate() + 6);
                             // Generate dates for Mon–Sun based on period_start_date
