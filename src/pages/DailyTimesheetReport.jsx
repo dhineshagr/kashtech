@@ -37,6 +37,14 @@ const DailyTimesheetReport = () => {
     const token = localStorage.getItem("token");
     const navigate = useNavigate();
 
+    const parseLocalDate = (val) => {
+        if (typeof val === "string" && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+          // Force local midnight instead of UTC midnight
+          return new Date(`${val}T00:00:00`);
+        }
+    return new Date(val);
+  };
+
     const fetchReport = async (customParams = {}) => {
 
         console.log("Fetching report with params:", customParams);
@@ -773,7 +781,7 @@ const buildStructuredFilters = () => {
                                 (parseFloat(row.saturday_hours) || 0) +
                                 (parseFloat(row.sunday_hours) || 0);
 
-                            const startDate = new Date(row.period_start_date);
+                            const startDate = parseLocalDate(row.period_start_date);
                             const endDate = new Date(startDate);
                             endDate.setDate(startDate.getDate() + 6);
                             // Generate dates for Mon–Sun based on period_start_date
