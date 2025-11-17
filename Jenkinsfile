@@ -11,7 +11,7 @@ pipeline {
         APP_PORT = "3000"
         EXPOSED_PORT = "3000"
         HOST_KEY = "ssh-ed25519 255 SHA256:JxFVN977xOlQnGfVKWXZvv+60A/VzBKsEU0rpP5+uOw"
-        SSH_KEY_PATH = "C:\KASH-TECH\Deployment\Kash-Operations-Server-New\Kash-Operations-Server-New.ppk"
+        SSH_KEY_PATH = "C:\\KASH-TECH\\Deployment\\Kash-Operations-Server-New\\Kash-Operations-Server-New.ppk"
     }
 
     stages {
