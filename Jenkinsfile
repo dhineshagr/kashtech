@@ -6,12 +6,12 @@ pipeline {
         IMAGE_TAG = "build-${BUILD_NUMBER}"
         DOCKER_IMAGE = "${IMAGE_NAME}:${IMAGE_TAG}"
         LATEST_TAG = "${IMAGE_NAME}:latest"
-        REMOTE_HOST = "20.127.197.227"
+        REMOTE_HOST = "130.131.68.35"
         CONTAINER_NAME = "kashtech"
         APP_PORT = "3000"
         EXPOSED_PORT = "3000"
-        HOST_KEY = "ssh-ed25519 255 SHA256:EWM3xhcabwaMCY8uo9AapEhwHsBREpvpHA0+0cd+Fjs"
-        SSH_KEY_PATH = "C:\\KASH-TECH\\Deployment\\Production\\Kash-Operations-SSH-Key.ppk"
+        HOST_KEY = "ssh-ed25519 255 SHA256:JxFVN977xOlQnGfVKWXZvv+60A/VzBKsEU0rpP5+uOw"
+        SSH_KEY_PATH = "C:\KASH-TECH\Deployment\Kash-Operations-Server-New\Kash-Operations-Server-New.ppk"
     }
 
     stages {
